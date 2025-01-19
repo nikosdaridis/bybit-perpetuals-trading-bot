@@ -1,23 +1,35 @@
-﻿using Newtonsoft.Json;
-using System.Reflection;
-using System.Security.Cryptography;
-using System.Text;
+﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 
 namespace CryptoFuturesTradingBot
 {
-    internal sealed class TradingBot
+    internal sealed class TradingBot(BaseHttpClient baseHttpClient, ILogger<TradingBot> logger)
     {
+        private readonly BaseHttpClient _baseHttpClient = baseHttpClient;
+        private readonly ILogger<TradingBot> _logger = logger;
         private Settings? _settings;
-        private string _settingsFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.json");
 
-        static void Main(string[] args)
+        static async Task Main()
         {
-            TradingBot tradingBot = new();
-            tradingBot.LoadSettings();
+            ServiceCollection serviceCollection = new();
+            ConfigureServices.AddServices(serviceCollection, TradingBotHelper.LoadSettings());
+            ServiceProvider serviceProvider = serviceCollection.BuildServiceProvider();
 
-            if (string.IsNullOrEmpty(tradingBot?._settings?.APIKey) || string.IsNullOrEmpty(tradingBot?._settings?.APISecret))
+            TradingBot tradingBot = serviceProvider.GetRequiredService<TradingBot>();
+            tradingBot._settings = TradingBotHelper.LoadSettings();
+
+            if (tradingBot?._settings is null || string.IsNullOrEmpty(tradingBot?._settings?.APIKey) || string.IsNullOrEmpty(tradingBot?._settings?.APISecret))
             {
-                Console.WriteLine("API Key or Secret is missing in settings.json");
+                Console.WriteLine(tradingBot?._settings is null
+                    ? "Settings file not found or invalid"
+                    : "API key or secret not found in settings file"
+                );
+                tradingBot?._logger.LogError(tradingBot?._settings is null
+                    ? "Settings file not found or invalid"
+                    : "API key or secret not found in settings file"
+                );
+
                 return;
             }
 
@@ -35,84 +47,22 @@ namespace CryptoFuturesTradingBot
             };
 
             string timestap = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
-            string signature = GenerateSignature(tradingBot._settings, timestap, parameters);
+            string signature = TradingBotHelper.GenerateSignature(tradingBot._settings, timestap, parameters);
             string jsonPayload = JsonConvert.SerializeObject(parameters);
 
-            using HttpClient client = new();
-            HttpRequestMessage request = new(HttpMethod.Post, StringUtility.BuildUri(tradingBot._settings.Endpoint, "order", "create"))
-            {
-                Content = new StringContent(jsonPayload, Encoding.UTF8, "application/json")
-            };
+            object? response = await tradingBot._baseHttpClient.PostAsync<object>(
+                TradingBotHelper.BuildUri(tradingBot._settings.Endpoint, "order", "create"),
+                jsonPayload,
+                tradingBot._settings.APIKey,
+                timestap,
+                signature,
+                tradingBot._settings.RecvWindow
+            );
 
-            request.Headers.Add("X-BAPI-API-KEY", tradingBot._settings.APIKey);
-            request.Headers.Add("X-BAPI-TIMESTAMP", timestap);
-            request.Headers.Add("X-BAPI-SIGN", signature);
-            request.Headers.Add("X-BAPI-RECV-WINDOW", tradingBot._settings.RecvWindow);
-
-            HttpResponseMessage response = client.SendAsync(request).Result;
-            Console.WriteLine(response.Content.ReadAsStringAsync().Result);
+            Console.WriteLine(response);
+            tradingBot._logger.LogInformation("Test");
 
             Console.ReadLine();
-        }
-
-        /// <summary>
-        /// Loads settings from the settings file and ensures all properties are present
-        /// </summary>
-        private void LoadSettings()
-        {
-            try
-            {
-                VerifySettings(File.ReadAllText(_settingsFilePath));
-            }
-            catch
-            {
-                VerifySettings();
-            }
-
-            // Verifies all properties are present and of the correct type in the settings file
-            void VerifySettings(string jsonContent = "")
-            {
-                bool updateFile = false;
-
-                Dictionary<string, object?> settingsMap = string.IsNullOrEmpty(jsonContent)
-                    ? []
-                    : JsonConvert.DeserializeObject<Dictionary<string, object?>>(jsonContent) ?? [];
-
-                foreach (PropertyInfo property in typeof(Settings).GetProperties())
-                {
-                    if (!settingsMap.TryGetValue(property.Name, out object? value) ||
-                        value == null ||
-                        !property.PropertyType.IsAssignableFrom(value?.GetType()))
-                    {
-                        settingsMap[property.Name] = property.GetValue(new Settings());
-                        updateFile = true;
-                    }
-                }
-
-                if (updateFile)
-                {
-                    string updatedJson = JsonConvert.SerializeObject(settingsMap, Formatting.Indented);
-                    File.WriteAllText(_settingsFilePath, updatedJson);
-
-                    _settings = JsonConvert.DeserializeObject<Settings>(updatedJson) ?? new();
-                }
-                else
-                {
-                    _settings = JsonConvert.DeserializeObject<Settings>(jsonContent);
-                }
-            }
-        }
-
-        /// <summary>
-        /// Generates signature for the Post request
-        /// </summary>
-        private static string GenerateSignature(Settings settings, string timestap, IDictionary<string, object> parameters)
-        {
-            string rawData = string.Concat(timestap, settings.APIKey, settings.RecvWindow, JsonConvert.SerializeObject(parameters));
-            using HMACSHA256 hmac = new(Encoding.UTF8.GetBytes(settings.APISecret));
-            byte[] signature = hmac.ComputeHash(Encoding.UTF8.GetBytes(rawData));
-
-            return Convert.ToHexStringLower(signature);
         }
     }
 }
