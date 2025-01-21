@@ -1,5 +1,4 @@
-﻿using BybitPerpetualsTradingBot.Models;
-using BybitPerpetualsTradingBot.Models.API;
+﻿using BybitPerpetualsTradingBot.Models.API;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -9,7 +8,6 @@ namespace BybitPerpetualsTradingBot
     {
         private readonly BaseHttpClient _baseHttpClient = baseHttpClient;
         private readonly ILogger<TradingBot> _logger = logger;
-        private Settings? _settings;
 
         static async Task Main()
         {
@@ -18,39 +16,39 @@ namespace BybitPerpetualsTradingBot
             ServiceProvider serviceProvider = serviceCollection.BuildServiceProvider();
 
             TradingBot tradingBot = serviceProvider.GetRequiredService<TradingBot>();
-            tradingBot._settings = TradingBotHelper.LoadSettings();
-            TradingBotHelper.InitializeDependencies(tradingBot._settings, tradingBot._baseHttpClient);
+            TradingBotHelper.InitializeDependencies(tradingBot._baseHttpClient);
 
-            if (string.IsNullOrEmpty(tradingBot?._settings?.APIKey) || string.IsNullOrEmpty(tradingBot?._settings?.APISecret))
-            {
-                Console.WriteLine("API key or secret not found in settings file");
-                tradingBot?._logger.LogError("API key or secret not found in settings file");
-                return;
-            }
+            //Get Instruments Info
+            ApiResponse<GetInstrumentsInfoResult>? responseInstrumentsInfo = await TradingBotHelper.GetInstrumentsInfo(ApiParams.Category.Linear);
+            Console.WriteLine($"InstrumentsInfo - Code: {responseInstrumentsInfo?.RetCode}, Message {responseInstrumentsInfo?.RetMsg}");
+            if (responseInstrumentsInfo?.RetCode != 0)
+                tradingBot._logger.LogError("Error getting instruments info: {RetMsg}", responseInstrumentsInfo?.RetMsg);
 
-            //Set leverage
-            ApiResponse<object>? responseSetLeverage = await TradingBotHelper.SetLeverage(ApiParameters.Category.Linear, "BTCUSDT", "10", "10");
-            Console.WriteLine(responseSetLeverage?.RetCode);
-            Console.WriteLine(responseSetLeverage?.RetMsg);
-
-            if (responseSetLeverage?.RetCode != 0 || responseSetLeverage.RetCode != 110043)
-            {
-                tradingBot._logger.LogError("Error setting margin mode and leverage: {RetMsg}", responseSetLeverage?.RetMsg);
-            }
+            Dictionary<string, GetInstrumentsInfoResult.InstrumentList>? responseInstrumentsInfoDictionary = responseInstrumentsInfo?.Result?.List?.ToDictionary(List => List.Symbol ?? "", List => List);
+            Console.WriteLine(responseInstrumentsInfoDictionary?["BTCUSDT"]?.LotSizeFilter?.MinOrderQty);
 
             //Get position info
-            ApiResponse<object>? responseGetPositionInfo = await TradingBotHelper.GetPositionInfo(ApiParameters.Category.Linear, "BTCUSDT");
-            Console.WriteLine(responseGetPositionInfo?.RetCode);
-            Console.WriteLine(responseGetPositionInfo?.RetMsg);
-
+            ApiResponse<GetPositionInfoResult>? responseGetPositionInfo = await TradingBotHelper.GetPositionInfo(ApiParams.Category.Linear, "BTCUSDT");
+            Console.WriteLine($"PositionInfo - Code: {responseGetPositionInfo?.RetCode}, Message {responseGetPositionInfo?.RetMsg}");
             if (responseGetPositionInfo?.RetCode != 0)
-            {
                 tradingBot._logger.LogError("Error getting position info: {RetMsg}", responseGetPositionInfo?.RetMsg);
-            }
+
+            //Set leverage
+            ApiResponse<object>? responseSetLeverage = await TradingBotHelper.SetLeverage(ApiParams.Category.Linear, "BTCUSDT", "100", "100");
+            Console.WriteLine($"SetLeverage - Code: {responseSetLeverage?.RetCode}, Message {responseSetLeverage?.RetMsg}");
+            if (responseSetLeverage?.RetCode != 0 && responseSetLeverage?.RetCode != 110043)
+                tradingBot._logger.LogError("Error setting leverage: {RetMsg}", responseSetLeverage?.RetMsg);
 
             //Place order
+            ApiResponse<PlaceOrderResult>? responsePlaceOrder = await TradingBotHelper.PlaceOrder(ApiParams.Category.Linear, "BTCUSDT", ApiParams.Side.Buy, ApiParams.OrderType.Limit, "0.001", "50000");
+            Console.WriteLine($"PlaceOrder - Code: {responsePlaceOrder?.RetCode}, Message {responsePlaceOrder?.RetMsg}");
+            if (responsePlaceOrder?.RetCode != 0)
+                tradingBot._logger.LogError("Error placing order: {RetMsg}", responsePlaceOrder?.RetMsg);
+
             //Batch Place Order
+
             //Amend order
+
             //Cancel all orders
 
             Console.ReadLine();

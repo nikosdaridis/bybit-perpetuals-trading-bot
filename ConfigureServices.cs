@@ -20,16 +20,16 @@ namespace BybitPerpetualsTradingBot
             serviceCollection.AddSingleton<BaseHttpClient>();
             serviceCollection.AddSingleton<TradingBot>();
 
-            ConfigureSerilog();
+            Settings settings = TradingBotHelper.LoadSettings();
+            ConfigureSerilog(settings);
             serviceCollection.AddLogging(loggingBuilder => loggingBuilder.AddSerilog(dispose: true));
         }
 
         /// <summary>
         /// Configures Serilog
         /// </summary>
-        private static void ConfigureSerilog()
+        private static void ConfigureSerilog(Settings settings)
         {
-            Settings settings = TradingBotHelper.LoadSettings();
             ArgumentNullException.ThrowIfNull(settings);
 
             Enum.TryParse(settings.Logs.MinimumLevel, true, out LogEventLevel minimumLevel);

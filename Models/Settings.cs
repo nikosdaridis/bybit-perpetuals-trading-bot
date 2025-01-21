@@ -10,10 +10,9 @@ namespace BybitPerpetualsTradingBot.Models
         public string RecvWindow { get; set; } = "30000";
         public SerilogConfig Logs { get; set; } = new SerilogConfig();
 
-
         internal sealed class SerilogConfig
         {
-            public SerilogPathsConfig Paths { get; set; } = new SerilogPathsConfig();
+            public SerilogPathsConfig Paths { get; set; } = new();
             public string MinimumLevel { get; set; } = "Information";
             public long FileSizeLimitBytes { get; set; } = 209715200;
             public string RollingInterval { get; set; } = "Day";

@@ -22,10 +22,46 @@ namespace BybitPerpetualsTradingBot
         /// <summary>
         /// Initializes TradingBotHelper with Dependencies
         /// </summary>
-        internal static void InitializeDependencies(Settings settings, BaseHttpClient baseHttpClient)
+        internal static void InitializeDependencies(BaseHttpClient baseHttpClient)
         {
             _baseHttpClient = baseHttpClient;
-            _settings = settings;
+        }
+
+        /// <summary>
+        /// Gets instruments info for category and optional symbol and limit
+        /// </summary>
+        internal static async Task<ApiResponse<GetInstrumentsInfoResult>?> GetInstrumentsInfo(string category, string symbol = "", int limit = 1000)
+        {
+            Dictionary<string, string> queryParams = new()
+            {
+                [nameof(category)] = category,
+                [nameof(limit)] = limit.ToString()
+            };
+
+            if (!string.IsNullOrEmpty(symbol))
+                queryParams[nameof(symbol)] = symbol.ToUpper();
+
+            string query = string.Join("&", queryParams.Select(kvp => $"{kvp.Key}={kvp.Value}"));
+            string uri = BuildUri(_settings.Endpoint, ApiParams.EndpointProduct.Market, string.Concat(ApiParams.EndpointModule.InstrumentsInfo, '?', query));
+
+            string timestap = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
+            string signature = GenerateSignature(_settings, timestap, query);
+
+            return await _baseHttpClient.GetAsync<ApiResponse<GetInstrumentsInfoResult>?>(uri, _settings.APIKey, timestap, signature, _settings.RecvWindow);
+        }
+
+        /// <summary>
+        /// Gets position info for category and symbol
+        /// </summary>
+        internal static async Task<ApiResponse<GetPositionInfoResult>?> GetPositionInfo(string category, string symbol)
+        {
+            string query = $"category={category}&symbol={symbol.ToUpper()}";
+            string uri = BuildUri(_settings.Endpoint, ApiParams.EndpointProduct.Position, string.Concat(ApiParams.EndpointModule.List, '?', query));
+
+            string timestap = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
+            string signature = GenerateSignature(_settings, timestap, query);
+
+            return await _baseHttpClient.GetAsync<ApiResponse<GetPositionInfoResult>?>(uri, _settings.APIKey, timestap, signature, _settings.RecvWindow);
         }
 
         /// <summary>
@@ -33,14 +69,14 @@ namespace BybitPerpetualsTradingBot
         /// </summary>
         internal static async Task<ApiResponse<object>?> SetLeverage(string category, string symbol, string buyLeverage, string sellLeverage)
         {
-            string uri = BuildUri(_settings.Endpoint, "position", "set-leverage");
+            string uri = BuildUri(_settings.Endpoint, ApiParams.EndpointProduct.Position, ApiParams.EndpointModule.SetLeverage);
 
             Dictionary<string, object> parameters = new()
             {
-                {"category",category},
-                {"symbol", symbol},
-                {"buyLeverage", buyLeverage},
-                {"sellLeverage", sellLeverage}
+                {nameof(category),category},
+                {nameof(symbol),symbol.ToUpper()},
+                {nameof(buyLeverage),buyLeverage},
+                {nameof(sellLeverage),sellLeverage}
             };
 
             string timestap = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
@@ -51,16 +87,29 @@ namespace BybitPerpetualsTradingBot
         }
 
         /// <summary>
-        /// Gets position info for category and symbol
+        /// Places order for category, symbol, side, order type and quantity with optional price, timeInforce and reduceOnly
         /// </summary>
-        internal static async Task<ApiResponse<object>?> GetPositionInfo(string category, string symbol)
+        internal static async Task<ApiResponse<PlaceOrderResult>?> PlaceOrder(string category, string symbol, string side, string orderType, string qty, string price = "0", string timeInForce = "PostOnly", bool reduceOnly = false)
         {
-            string uri = BuildUri(_settings.Endpoint, "position", $"list?category={category}&symbol={symbol}");
+            string uri = BuildUri(_settings.Endpoint, ApiParams.EndpointProduct.Order, ApiParams.EndpointModule.Create);
+
+            Dictionary<string, object> parameters = new()
+                {
+                    {nameof(category),category},
+                    {nameof(symbol),symbol.ToUpper()},
+                    {nameof(side),side},
+                    {nameof(orderType),orderType},
+                    {nameof(qty),qty},
+                    {nameof(price),price},
+                    {nameof(timeInForce),timeInForce},
+                    {nameof(reduceOnly),reduceOnly}
+                };
 
             string timestap = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
-            string signature = GenerateSignature(_settings, timestap, $"category={category}&symbol={symbol}");
+            string signature = GenerateSignature(_settings, timestap, parameters);
+            string jsonPayload = JsonConvert.SerializeObject(parameters);
 
-            return await _baseHttpClient.GetAsync<ApiResponse<object>?>(uri, _settings.APIKey, timestap, signature, _settings.RecvWindow);
+            return await _baseHttpClient.PostAsync<ApiResponse<PlaceOrderResult>?>(uri, jsonPayload, _settings.APIKey, timestap, signature, _settings.RecvWindow);
         }
 
         /// <summary>
@@ -70,12 +119,17 @@ namespace BybitPerpetualsTradingBot
         {
             try
             {
-                return VerifySettings(File.ReadAllText(_settingsFilePath));
+                _settings = VerifySettings(File.ReadAllText(_settingsFilePath));
             }
             catch
             {
-                return VerifySettings();
+                _settings = VerifySettings();
             }
+
+            if (string.IsNullOrEmpty(_settings?.APIKey) || string.IsNullOrEmpty(_settings?.APISecret))
+                throw new Exception("API Key or Secret not found in settings.json");
+
+            return _settings;
 
             // Verifies all properties are present and of the correct type in the settings file
             static Settings VerifySettings(string jsonContent = "")
