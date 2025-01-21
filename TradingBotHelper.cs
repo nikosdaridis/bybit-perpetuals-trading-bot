@@ -1,18 +1,67 @@
-﻿using Newtonsoft.Json;
+﻿using BybitPerpetualsTradingBot.Models;
+using BybitPerpetualsTradingBot.Models.API;
+using Newtonsoft.Json;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace CryptoFuturesTradingBot
+namespace BybitPerpetualsTradingBot
 {
     internal static partial class TradingBotHelper
     {
+        private static BaseHttpClient _baseHttpClient;
+        private static Settings _settings;
+
         // Matches route parameters in curly braces
         [GeneratedRegex(@"\{[^{}]+\}", RegexOptions.Compiled)]
         private static partial Regex RouteParameterRegex();
 
         private readonly static string _settingsFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.json");
+
+        /// <summary>
+        /// Initializes TradingBotHelper with Dependencies
+        /// </summary>
+        internal static void InitializeDependencies(Settings settings, BaseHttpClient baseHttpClient)
+        {
+            _baseHttpClient = baseHttpClient;
+            _settings = settings;
+        }
+
+        /// <summary>
+        /// Sets leverage for category and symbol
+        /// </summary>
+        internal static async Task<ApiResponse<object>?> SetLeverage(string category, string symbol, string buyLeverage, string sellLeverage)
+        {
+            string uri = BuildUri(_settings.Endpoint, "position", "set-leverage");
+
+            Dictionary<string, object> parameters = new()
+            {
+                {"category",category},
+                {"symbol", symbol},
+                {"buyLeverage", buyLeverage},
+                {"sellLeverage", sellLeverage}
+            };
+
+            string timestap = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
+            string signature = GenerateSignature(_settings, timestap, parameters);
+            string jsonPayload = JsonConvert.SerializeObject(parameters);
+
+            return await _baseHttpClient.PostAsync<ApiResponse<object>?>(uri, jsonPayload, _settings.APIKey, timestap, signature, _settings.RecvWindow);
+        }
+
+        /// <summary>
+        /// Gets position info for category and symbol
+        /// </summary>
+        internal static async Task<ApiResponse<object>?> GetPositionInfo(string category, string symbol)
+        {
+            string uri = BuildUri(_settings.Endpoint, "position", $"list?category={category}&symbol={symbol}");
+
+            string timestap = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
+            string signature = GenerateSignature(_settings, timestap, $"category={category}&symbol={symbol}");
+
+            return await _baseHttpClient.GetAsync<ApiResponse<object>?>(uri, _settings.APIKey, timestap, signature, _settings.RecvWindow);
+        }
 
         /// <summary>
         /// Loads settings from the settings file and verifies all properties are present
@@ -77,11 +126,22 @@ namespace CryptoFuturesTradingBot
         }
 
         /// <summary>
-        /// Generates signature for Post request
+        /// Generates signature for GET with query
         /// </summary>
-        internal static string GenerateSignature(Settings settings, string timestap, IDictionary<string, object> parameters)
+        private static string GenerateSignature(Settings settings, string timestap, string query) =>
+            GenerateSignatureBase(settings, string.Concat(timestap, settings.APIKey, settings.RecvWindow, query));
+
+        /// <summary>
+        /// Generates signature for POST with parameters
+        /// </summary>
+        private static string GenerateSignature(Settings settings, string timestap, IDictionary<string, object> parameters) =>
+            GenerateSignatureBase(settings, string.Concat(timestap, settings.APIKey, settings.RecvWindow, JsonConvert.SerializeObject(parameters)));
+
+        /// <summary>
+        /// Generates signature with raw data
+        /// </summary>
+        private static string GenerateSignatureBase(Settings settings, string rawData)
         {
-            string rawData = string.Concat(timestap, settings.APIKey, settings.RecvWindow, JsonConvert.SerializeObject(parameters));
             using HMACSHA256 hmac = new(Encoding.UTF8.GetBytes(settings.APISecret));
             byte[] signature = hmac.ComputeHash(Encoding.UTF8.GetBytes(rawData));
 

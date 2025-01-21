@@ -1,5 +1,5 @@
 <h1 align="center">
-  Crypto Futures Trading Bot
+  Bybit Perpetuals Trading Bot
 </h1>
 
 <p align="center">

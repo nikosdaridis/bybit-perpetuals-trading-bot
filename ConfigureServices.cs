@@ -1,10 +1,11 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using BybitPerpetualsTradingBot.Models;
+using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using Serilog.Events;
 using System.Globalization;
 using System.Runtime.InteropServices;
 
-namespace CryptoFuturesTradingBot
+namespace BybitPerpetualsTradingBot
 {
     internal static class ConfigureServices
     {
@@ -13,21 +14,22 @@ namespace CryptoFuturesTradingBot
         /// <summary>
         /// Adds services
         /// </summary>
-        public static void AddServices(ServiceCollection serviceCollection, Settings? settings)
+        public static void AddServices(ServiceCollection serviceCollection)
         {
             serviceCollection.AddSingleton<HttpClient>();
             serviceCollection.AddSingleton<BaseHttpClient>();
             serviceCollection.AddSingleton<TradingBot>();
 
-            ConfigureSerilog(settings);
+            ConfigureSerilog();
             serviceCollection.AddLogging(loggingBuilder => loggingBuilder.AddSerilog(dispose: true));
         }
 
         /// <summary>
         /// Configures Serilog
         /// </summary>
-        private static void ConfigureSerilog(Settings? settings)
+        private static void ConfigureSerilog()
         {
+            Settings settings = TradingBotHelper.LoadSettings();
             ArgumentNullException.ThrowIfNull(settings);
 
             Enum.TryParse(settings.Logs.MinimumLevel, true, out LogEventLevel minimumLevel);

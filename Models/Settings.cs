@@ -1,14 +1,15 @@
 ﻿using System.Runtime.InteropServices;
 
-namespace CryptoFuturesTradingBot
+namespace BybitPerpetualsTradingBot.Models
 {
     internal sealed class Settings
     {
         public string APIKey { get; set; } = string.Empty;
         public string APISecret { get; set; } = string.Empty;
         public string Endpoint { get; set; } = "https://api-demo.bybit.com/v5/{product}/{module}";
-        public string RecvWindow { get; set; } = "10000";
+        public string RecvWindow { get; set; } = "30000";
         public SerilogConfig Logs { get; set; } = new SerilogConfig();
+
 
         internal sealed class SerilogConfig
         {
@@ -24,8 +25,8 @@ namespace CryptoFuturesTradingBot
 
             internal sealed class SerilogPathsConfig
             {
-                public string Windows { get; set; } = "C:\\logs\\cryptofuturestradingbot\\.log";
-                public string Linux { get; set; } = "/var/log/cryptofuturestradingbot/.log";
+                public string Windows { get; set; } = "C:\\logs\\bybit-perpetuals-trading-bot\\.log";
+                public string Linux { get; set; } = "/var/log/bybit-perpetuals-trading-bot/.log";
 
                 internal string GetPath(OSPlatform osPlatform) =>
                     osPlatform.ToString() switch

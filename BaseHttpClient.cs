@@ -2,30 +2,39 @@
 using Newtonsoft.Json;
 using System.Text;
 
-namespace CryptoFuturesTradingBot
+namespace BybitPerpetualsTradingBot
 {
     internal class BaseHttpClient(HttpClient httpClient, ILogger<BaseHttpClient> logger)
     {
         /// <summary>
         /// GET request to specified URI and returns deserialized response
         /// </summary>
-        public Task<TResponse?> GetAsync<TResponse>(string requestUri) =>
-            SendAsync<TResponse?>(new HttpRequestMessage(HttpMethod.Get, requestUri));
+        public async Task<TResponse?> GetAsync<TResponse>(string uri, string apiKey, string timestamp, string signature, string recvWindow = "5000")
+        {
+            HttpRequestMessage request = new(HttpMethod.Get, uri);
+
+            request.Headers.Add("X-BAPI-API-KEY", apiKey);
+            request.Headers.Add("X-BAPI-TIMESTAMP", timestamp);
+            request.Headers.Add("X-BAPI-SIGN", signature);
+            request.Headers.Add("X-BAPI-RECV-WINDOW", recvWindow);
+
+            return await SendAsync<TResponse>(request);
+        }
 
         /// <summary>
         /// POST request to specified URI with payload and headers and returns deserialized response
         /// </summary>
-        public async Task<TResponse?> PostAsync<TResponse>(string requestUri, string payload, string apiKey, string timestamp, string signature, string recvWindow = "5000")
+        public async Task<TResponse?> PostAsync<TResponse>(string uri, string jsonPayload, string apiKey, string timestamp, string signature, string recvWindow = "5000")
         {
-            HttpRequestMessage request = new(HttpMethod.Post, requestUri)
+            HttpRequestMessage request = new(HttpMethod.Post, uri)
             {
-                Content = new StringContent(payload, Encoding.UTF8, "application/json")
+                Content = new StringContent(jsonPayload, Encoding.UTF8, "application/json")
             };
 
             request.Headers.Add("X-BAPI-API-KEY", apiKey);
             request.Headers.Add("X-BAPI-TIMESTAMP", timestamp);
             request.Headers.Add("X-BAPI-SIGN", signature);
-            request.Headers.Add("X-BAPI-RECV-WINDOW", recvWindow.ToString());
+            request.Headers.Add("X-BAPI-RECV-WINDOW", recvWindow);
 
             return await SendAsync<TResponse>(request);
         }

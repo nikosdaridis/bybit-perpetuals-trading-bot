@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.12.35527.113 d17.12
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CryptoFuturesTradingBot", "CryptoFuturesTradingBot.csproj", "{EA3B6A48-D318-486D-B3D9-5E007CA0186B}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BybitPerpetualsTradingBot", "BybitPerpetualsTradingBot.csproj", "{BB135CC6-FEB3-40EC-96DF-D3D291E76920}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -11,10 +11,10 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{EA3B6A48-D318-486D-B3D9-5E007CA0186B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{EA3B6A48-D318-486D-B3D9-5E007CA0186B}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{EA3B6A48-D318-486D-B3D9-5E007CA0186B}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{EA3B6A48-D318-486D-B3D9-5E007CA0186B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BB135CC6-FEB3-40EC-96DF-D3D291E76920}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BB135CC6-FEB3-40EC-96DF-D3D291E76920}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BB135CC6-FEB3-40EC-96DF-D3D291E76920}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BB135CC6-FEB3-40EC-96DF-D3D291E76920}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

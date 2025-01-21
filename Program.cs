@@ -1,8 +1,9 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using BybitPerpetualsTradingBot.Models;
+using BybitPerpetualsTradingBot.Models.API;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
 
-namespace CryptoFuturesTradingBot
+namespace BybitPerpetualsTradingBot
 {
     internal sealed class TradingBot(BaseHttpClient baseHttpClient, ILogger<TradingBot> logger)
     {
@@ -13,54 +14,44 @@ namespace CryptoFuturesTradingBot
         static async Task Main()
         {
             ServiceCollection serviceCollection = new();
-            ConfigureServices.AddServices(serviceCollection, TradingBotHelper.LoadSettings());
+            ConfigureServices.AddServices(serviceCollection);
             ServiceProvider serviceProvider = serviceCollection.BuildServiceProvider();
 
             TradingBot tradingBot = serviceProvider.GetRequiredService<TradingBot>();
             tradingBot._settings = TradingBotHelper.LoadSettings();
+            TradingBotHelper.InitializeDependencies(tradingBot._settings, tradingBot._baseHttpClient);
 
-            if (tradingBot?._settings is null || string.IsNullOrEmpty(tradingBot?._settings?.APIKey) || string.IsNullOrEmpty(tradingBot?._settings?.APISecret))
+            if (string.IsNullOrEmpty(tradingBot?._settings?.APIKey) || string.IsNullOrEmpty(tradingBot?._settings?.APISecret))
             {
-                Console.WriteLine(tradingBot?._settings is null
-                    ? "Settings file not found or invalid"
-                    : "API key or secret not found in settings file"
-                );
-                tradingBot?._logger.LogError(tradingBot?._settings is null
-                    ? "Settings file not found or invalid"
-                    : "API key or secret not found in settings file"
-                );
-
+                Console.WriteLine("API key or secret not found in settings file");
+                tradingBot?._logger.LogError("API key or secret not found in settings file");
                 return;
             }
 
-            Dictionary<string, object> parameters = new()
+            //Set leverage
+            ApiResponse<object>? responseSetLeverage = await TradingBotHelper.SetLeverage(ApiParameters.Category.Linear, "BTCUSDT", "10", "10");
+            Console.WriteLine(responseSetLeverage?.RetCode);
+            Console.WriteLine(responseSetLeverage?.RetMsg);
+
+            if (responseSetLeverage?.RetCode != 0 || responseSetLeverage.RetCode != 110043)
             {
-                {"category", "linear"},
-                {"symbol", "BTCUSDT"},
-                {"side", "Buy"},
-                {"orderType", "Limit"},
-                {"qty", "0.001"},
-                {"price", "50000"},
-                {"timeInForce", "GTC"},
-                {"positionIdx", "0"},
-                {"takeProfit", "80000"}
-            };
+                tradingBot._logger.LogError("Error setting margin mode and leverage: {RetMsg}", responseSetLeverage?.RetMsg);
+            }
 
-            string timestap = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
-            string signature = TradingBotHelper.GenerateSignature(tradingBot._settings, timestap, parameters);
-            string jsonPayload = JsonConvert.SerializeObject(parameters);
+            //Get position info
+            ApiResponse<object>? responseGetPositionInfo = await TradingBotHelper.GetPositionInfo(ApiParameters.Category.Linear, "BTCUSDT");
+            Console.WriteLine(responseGetPositionInfo?.RetCode);
+            Console.WriteLine(responseGetPositionInfo?.RetMsg);
 
-            object? response = await tradingBot._baseHttpClient.PostAsync<object>(
-                TradingBotHelper.BuildUri(tradingBot._settings.Endpoint, "order", "create"),
-                jsonPayload,
-                tradingBot._settings.APIKey,
-                timestap,
-                signature,
-                tradingBot._settings.RecvWindow
-            );
+            if (responseGetPositionInfo?.RetCode != 0)
+            {
+                tradingBot._logger.LogError("Error getting position info: {RetMsg}", responseGetPositionInfo?.RetMsg);
+            }
 
-            Console.WriteLine(response);
-            tradingBot._logger.LogInformation("Test");
+            //Place order
+            //Batch Place Order
+            //Amend order
+            //Cancel all orders
 
             Console.ReadLine();
         }
