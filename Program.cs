@@ -108,8 +108,16 @@ namespace BybitPerpetualsTradingBot
             }
 
             //Amend Order
+            ApiResponse<OrderResult, object>? responseAmendOrder = await TradingBotHelper.AmendOrder(Category.Linear, "BTCUSDT", responseBatchPlaceOrder?.Result?.List?.Last()?.OrderId ?? "", "55000");
+            Console.WriteLine($"AmendOrder - Code: {responseAmendOrder?.RetCode}, Message: {responseAmendOrder?.RetMsg}");
+            if (responseAmendOrder?.RetCode != 0)
+                tradingBot._logger.LogError("Error amending order: {RetMsg}", responseAmendOrder?.RetMsg);
 
             //Cancel All Orders
+            ApiResponse<CancelAllOrdersResult, object>? responseCancelAllOrders = await TradingBotHelper.CancelAllOrders(Category.Linear, "BTCUSDT");
+            Console.WriteLine($"CancelAllOrders - Code: {responseCancelAllOrders?.RetCode}, Message: {responseCancelAllOrders?.RetMsg}");
+            if (responseCancelAllOrders?.RetCode != 0)
+                tradingBot._logger.LogError("Error cancelling all orders: {RetMsg}", responseCancelAllOrders?.RetMsg);
 
             Console.ReadLine();
         }

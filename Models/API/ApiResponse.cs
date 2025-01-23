@@ -496,4 +496,13 @@ namespace BybitPerpetualsTradingBot.Models.API
             public string? Msg { get; set; }
         }
     }
+
+    internal sealed class CancelAllOrdersResult
+    {
+        [JsonProperty("list")]
+        public List<OrderResult>? List { get; set; }
+
+        [JsonProperty("success")]
+        public string? Success { get; set; }
+    }
 }

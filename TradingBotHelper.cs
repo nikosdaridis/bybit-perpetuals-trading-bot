@@ -165,6 +165,48 @@ namespace BybitPerpetualsTradingBot
         }
 
         /// <summary>
+        /// Amends order for category, symbol, orderId and price
+        /// </summary>
+        internal static async Task<ApiResponse<OrderResult, object>?> AmendOrder(string category, string symbol, string orderId, string price)
+        {
+            string uri = BuildUri(_settings.Endpoint, EndpointProduct.Order, EndpointModule.Amend);
+
+            Dictionary<string, object> parameters = new()
+                {
+                    {nameof(category), category},
+                    {nameof(symbol), symbol.ToUpper()},
+                    {nameof(orderId), orderId},
+                    {nameof(price), price}
+                };
+
+            string timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
+            string jsonPayload = JsonConvert.SerializeObject(parameters, _jsonSerializerSettings);
+            string signature = GenerateSignature(_settings, timestamp, jsonPayload);
+
+            return await _baseHttpClient.PostAsync<ApiResponse<OrderResult, object>?>(uri, jsonPayload, _settings.APIKey, timestamp, signature, _settings.RecvWindow);
+        }
+
+        /// <summary>
+        /// Cancels all orders for category and symbol
+        /// </summary>
+        internal static async Task<ApiResponse<CancelAllOrdersResult, object>?> CancelAllOrders(string category, string symbol)
+        {
+            string uri = BuildUri(_settings.Endpoint, EndpointProduct.Order, EndpointModule.CancelAll);
+
+            Dictionary<string, object> parameters = new()
+                {
+                    {nameof(category), category},
+                    {nameof(symbol), symbol.ToUpper()}
+                };
+
+            string timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
+            string jsonPayload = JsonConvert.SerializeObject(parameters, _jsonSerializerSettings);
+            string signature = GenerateSignature(_settings, timestamp, jsonPayload);
+
+            return await _baseHttpClient.PostAsync<ApiResponse<CancelAllOrdersResult, object>?>(uri, jsonPayload, _settings.APIKey, timestamp, signature, _settings.RecvWindow);
+        }
+
+        /// <summary>
         /// Loads settings from the settings file and verifies all properties are present and of the correct type
         /// </summary>
         internal static Settings LoadSettings()
