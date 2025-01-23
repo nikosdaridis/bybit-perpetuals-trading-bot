@@ -2,7 +2,7 @@
 
 namespace BybitPerpetualsTradingBot.Models.API
 {
-    internal sealed class ApiResponse<TBusinessData>
+    internal sealed class ApiResponse<TBusinessData, TRetExtInfo>
     {
         [JsonProperty("retCode")]
         public int RetCode { get; set; }
@@ -14,7 +14,7 @@ namespace BybitPerpetualsTradingBot.Models.API
         public TBusinessData? Result { get; set; }
 
         [JsonProperty("retExtInfo")]
-        public object? RetExtInfo { get; set; }
+        public TRetExtInfo? RetExtInfo { get; set; }
 
         [JsonProperty("time")]
         public long Time { get; set; }
@@ -302,12 +302,198 @@ namespace BybitPerpetualsTradingBot.Models.API
         }
     }
 
-    internal sealed class PlaceOrderResult
+    internal sealed class GetOpenAndClosedOrdersResult
+    {
+        [JsonProperty("category")]
+        public string? Category { get; set; }
+
+        [JsonProperty("nextPageCursor")]
+        public string? NextPageCursor { get; set; }
+
+        [JsonProperty("list")]
+        public List<GetOpenAndClosedOrdersList>? List { get; set; }
+
+        internal sealed class GetOpenAndClosedOrdersList
+        {
+            [JsonProperty("orderId")]
+            public string? OrderId { get; set; }
+
+            [JsonProperty("orderLinkId")]
+            public string? OrderLinkId { get; set; }
+
+            [JsonProperty("blockTradeId")]
+            public string? BlockTradeId { get; set; }
+
+            [JsonProperty("symbol")]
+            public string? Symbol { get; set; }
+
+            [JsonProperty("price")]
+            public string? Price { get; set; }
+
+            [JsonProperty("qty")]
+            public string? Quantity { get; set; }
+
+            [JsonProperty("side")]
+            public string? Side { get; set; }
+
+            [JsonProperty("isLeverage")]
+            public string? IsLeverage { get; set; }
+
+            [JsonProperty("positionIdx")]
+            public int? PositionIdx { get; set; }
+
+            [JsonProperty("orderStatus")]
+            public string? OrderStatus { get; set; }
+
+            [JsonProperty("createType")]
+            public string? CreateType { get; set; }
+
+            [JsonProperty("cancelType")]
+            public string? CancelType { get; set; }
+
+            [JsonProperty("rejectReason")]
+            public string? RejectReason { get; set; }
+
+            [JsonProperty("avgPrice")]
+            public string? AvgPrice { get; set; }
+
+            [JsonProperty("leavesQty")]
+            public string? LeavesQty { get; set; }
+
+            [JsonProperty("leavesValue")]
+            public string? LeavesValue { get; set; }
+
+            [JsonProperty("cumExecQty")]
+            public string? CumExecQty { get; set; }
+
+            [JsonProperty("cumExecValue")]
+            public string? CumExecValue { get; set; }
+
+            [JsonProperty("cumExecFee")]
+            public string? CumExecFee { get; set; }
+
+            [JsonProperty("timeInForce")]
+            public string? TimeInForce { get; set; }
+
+            [JsonProperty("orderType")]
+            public string? OrderType { get; set; }
+
+            [JsonProperty("stopOrderType")]
+            public string? StopOrderType { get; set; }
+
+            [JsonProperty("orderIv")]
+            public string? OrderIv { get; set; }
+
+            [JsonProperty("marketUnit")]
+            public string? MarketUnit { get; set; }
+
+            [JsonProperty("triggerPrice")]
+            public string? TriggerPrice { get; set; }
+
+            [JsonProperty("takeProfit")]
+            public string? TakeProfit { get; set; }
+
+            [JsonProperty("stopLoss")]
+            public string? StopLoss { get; set; }
+
+            [JsonProperty("tpslMode")]
+            public string? TpslMode { get; set; }
+
+            [JsonProperty("ocoTriggerBy")]
+            public string? OcoTriggerBy { get; set; }
+
+            [JsonProperty("tpLimitPrice")]
+            public string? TpLimitPrice { get; set; }
+
+            [JsonProperty("slLimitPrice")]
+            public string? SlLimitPrice { get; set; }
+
+            [JsonProperty("tpTriggerBy")]
+            public string? TpTriggerBy { get; set; }
+
+            [JsonProperty("slTriggerBy")]
+            public string? SlTriggerBy { get; set; }
+
+            [JsonProperty("triggerDirection")]
+            public int? TriggerDirection { get; set; }
+
+            [JsonProperty("triggerBy")]
+            public string? TriggerBy { get; set; }
+
+            [JsonProperty("lastPriceOnCreated")]
+            public string? LastPriceOnCreated { get; set; }
+
+            [JsonProperty("reduceOnly")]
+            public bool? ReduceOnly { get; set; }
+
+            [JsonProperty("closeOnTrigger")]
+            public bool? CloseOnTrigger { get; set; }
+
+            [JsonProperty("placeType")]
+            public string? PlaceType { get; set; }
+
+            [JsonProperty("smpType")]
+            public string? SmpType { get; set; }
+
+            [JsonProperty("smpGroup")]
+            public int? SmpGroup { get; set; }
+
+            [JsonProperty("smpOrderId")]
+            public string? SmpOrderId { get; set; }
+
+            [JsonProperty("createdTime")]
+            public string? CreatedTime { get; set; }
+
+            [JsonProperty("updatedTime")]
+            public string? UpdatedTime { get; set; }
+        }
+    }
+
+    internal sealed class OrderResult
     {
         [JsonProperty("orderId")]
         public string? OrderId { get; set; }
 
         [JsonProperty("orderLinkId")]
         public string? OrderLinkId { get; set; }
+    }
+
+    internal sealed class BatchOrderResult
+    {
+        [JsonProperty("list")]
+        public List<BatchOrderDetails>? List { get; set; }
+
+        internal sealed class BatchOrderDetails
+        {
+            [JsonProperty("category")]
+            public string? Category { get; set; }
+
+            [JsonProperty("symbol")]
+            public string? Symbol { get; set; }
+
+            [JsonProperty("orderId")]
+            public string? OrderId { get; set; }
+
+            [JsonProperty("orderLinkId")]
+            public string? OrderLinkId { get; set; }
+
+            [JsonProperty("createAt")]
+            public string? CreateAt { get; set; }
+        }
+    }
+
+    internal sealed class BatchOrderRetExtInfo
+    {
+        [JsonProperty("list")]
+        public List<RetExtDetails>? List { get; set; }
+
+        internal sealed class RetExtDetails
+        {
+            [JsonProperty("code")]
+            public int Code { get; set; }
+
+            [JsonProperty("msg")]
+            public string? Msg { get; set; }
+        }
     }
 }

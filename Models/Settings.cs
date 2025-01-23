@@ -8,7 +8,7 @@ namespace BybitPerpetualsTradingBot.Models
         public string APISecret { get; set; } = string.Empty;
         public string Endpoint { get; set; } = "https://api-demo.bybit.com/v5/{product}/{module}";
         public string RecvWindow { get; set; } = "30000";
-        public SerilogConfig Logs { get; set; } = new SerilogConfig();
+        public SerilogConfig Logs { get; set; } = new();
 
         internal sealed class SerilogConfig
         {
@@ -24,8 +24,8 @@ namespace BybitPerpetualsTradingBot.Models
 
             internal sealed class SerilogPathsConfig
             {
-                public string Windows { get; set; } = "C:\\logs\\bybit-perpetuals-trading-bot\\.log";
-                public string Linux { get; set; } = "/var/log/bybit-perpetuals-trading-bot/.log";
+                public string Windows { get; set; } = @"C:\logs\bybit-perpetuals-trading-bot\.log";
+                public string Linux { get; set; } = @"/var/log/bybit-perpetuals-trading-bot/.log";
 
                 internal string GetPath(OSPlatform osPlatform) =>
                     osPlatform.ToString() switch

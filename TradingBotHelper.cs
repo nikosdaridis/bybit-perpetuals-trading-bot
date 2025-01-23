@@ -1,10 +1,12 @@
 ﻿using BybitPerpetualsTradingBot.Models;
 using BybitPerpetualsTradingBot.Models.API;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Serialization;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
+using static BybitPerpetualsTradingBot.Models.API.ApiParameters;
 
 namespace BybitPerpetualsTradingBot
 {
@@ -18,6 +20,18 @@ namespace BybitPerpetualsTradingBot
         private static partial Regex RouteParameterRegex();
 
         private readonly static string _settingsFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.json");
+        private readonly static JsonSerializerSettings _jsonSerializerSettings = new()
+        {
+            ContractResolver = new DefaultContractResolver
+            {
+                NamingStrategy = new CamelCaseNamingStrategy
+                {
+                    ProcessDictionaryKeys = true,
+                    OverrideSpecifiedNames = false
+                }
+            },
+            NullValueHandling = NullValueHandling.Ignore
+        };
 
         /// <summary>
         /// Initializes TradingBotHelper with Dependencies
@@ -30,90 +44,128 @@ namespace BybitPerpetualsTradingBot
         /// <summary>
         /// Gets instruments info for category and optional symbol and limit
         /// </summary>
-        internal static async Task<ApiResponse<GetInstrumentsInfoResult>?> GetInstrumentsInfo(string category, string symbol = "", int limit = 1000)
+        internal static async Task<ApiResponse<GetInstrumentsInfoResult, object>?> GetInstrumentsInfo(string category, string symbol = "", int limit = 1000)
         {
             Dictionary<string, string> queryParams = new()
             {
-                [nameof(category)] = category,
-                [nameof(limit)] = limit.ToString()
+                {nameof(category), category},
+                {nameof(limit), limit.ToString()}
             };
 
             if (!string.IsNullOrEmpty(symbol))
                 queryParams[nameof(symbol)] = symbol.ToUpper();
 
             string query = string.Join("&", queryParams.Select(kvp => $"{kvp.Key}={kvp.Value}"));
-            string uri = BuildUri(_settings.Endpoint, ApiParams.EndpointProduct.Market, string.Concat(ApiParams.EndpointModule.InstrumentsInfo, '?', query));
+            string uri = BuildUri(_settings.Endpoint, EndpointProduct.Market, string.Concat(EndpointModule.InstrumentsInfo, '?', query));
 
-            string timestap = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
-            string signature = GenerateSignature(_settings, timestap, query);
+            string timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
+            string signature = GenerateSignature(_settings, timestamp, query);
 
-            return await _baseHttpClient.GetAsync<ApiResponse<GetInstrumentsInfoResult>?>(uri, _settings.APIKey, timestap, signature, _settings.RecvWindow);
+            return await _baseHttpClient.GetAsync<ApiResponse<GetInstrumentsInfoResult, object>?>(uri, _settings.APIKey, timestamp, signature, _settings.RecvWindow);
         }
 
         /// <summary>
         /// Gets position info for category and symbol
         /// </summary>
-        internal static async Task<ApiResponse<GetPositionInfoResult>?> GetPositionInfo(string category, string symbol)
+        internal static async Task<ApiResponse<GetPositionInfoResult, object>?> GetPositionInfo(string category, string symbol)
         {
-            string query = $"category={category}&symbol={symbol.ToUpper()}";
-            string uri = BuildUri(_settings.Endpoint, ApiParams.EndpointProduct.Position, string.Concat(ApiParams.EndpointModule.List, '?', query));
+            string query = $"{nameof(category)}={category}&{nameof(symbol)}={symbol.ToUpper()}";
+            string uri = BuildUri(_settings.Endpoint, EndpointProduct.Position, string.Concat(EndpointModule.List, '?', query));
 
-            string timestap = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
-            string signature = GenerateSignature(_settings, timestap, query);
+            string timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
+            string signature = GenerateSignature(_settings, timestamp, query);
 
-            return await _baseHttpClient.GetAsync<ApiResponse<GetPositionInfoResult>?>(uri, _settings.APIKey, timestap, signature, _settings.RecvWindow);
+            return await _baseHttpClient.GetAsync<ApiResponse<GetPositionInfoResult, object>?>(uri, _settings.APIKey, timestamp, signature, _settings.RecvWindow);
+        }
+
+        /// <summary>
+        /// Gets open and closed orders for category, symbol and openOnly with optional limit
+        /// </summary>
+        internal static async Task<ApiResponse<GetOpenAndClosedOrdersResult, object>?> GetOpenAndClosedOrders(string category, string symbol, int openOnly, int limit = 50)
+        {
+            string query = $"{nameof(category)}={category}&{nameof(symbol)}={symbol.ToUpper()}&{nameof(openOnly)}={openOnly}&{nameof(limit)}={limit}";
+            string uri = BuildUri(_settings.Endpoint, EndpointProduct.Order, string.Concat(EndpointModule.RealTime, '?', query));
+
+            string timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
+            string signature = GenerateSignature(_settings, timestamp, query);
+
+            return await _baseHttpClient.GetAsync<ApiResponse<GetOpenAndClosedOrdersResult, object>?>(uri, _settings.APIKey, timestamp, signature, _settings.RecvWindow);
         }
 
         /// <summary>
         /// Sets leverage for category and symbol
         /// </summary>
-        internal static async Task<ApiResponse<object>?> SetLeverage(string category, string symbol, string buyLeverage, string sellLeverage)
+        internal static async Task<ApiResponse<object, object>?> SetLeverage(string category, string symbol, string buyLeverage, string sellLeverage)
         {
-            string uri = BuildUri(_settings.Endpoint, ApiParams.EndpointProduct.Position, ApiParams.EndpointModule.SetLeverage);
+            string uri = BuildUri(_settings.Endpoint, EndpointProduct.Position, EndpointModule.SetLeverage);
 
             Dictionary<string, object> parameters = new()
             {
-                {nameof(category),category},
-                {nameof(symbol),symbol.ToUpper()},
-                {nameof(buyLeverage),buyLeverage},
-                {nameof(sellLeverage),sellLeverage}
+                {nameof(category), category},
+                {nameof(symbol), symbol.ToUpper()},
+                {nameof(buyLeverage), buyLeverage},
+                {nameof(sellLeverage), sellLeverage}
             };
 
-            string timestap = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
-            string signature = GenerateSignature(_settings, timestap, parameters);
-            string jsonPayload = JsonConvert.SerializeObject(parameters);
+            string timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
+            string jsonPayload = JsonConvert.SerializeObject(parameters, _jsonSerializerSettings);
+            string signature = GenerateSignature(_settings, timestamp, jsonPayload);
 
-            return await _baseHttpClient.PostAsync<ApiResponse<object>?>(uri, jsonPayload, _settings.APIKey, timestap, signature, _settings.RecvWindow);
+            return await _baseHttpClient.PostAsync<ApiResponse<object, object>?>(uri, jsonPayload, _settings.APIKey, timestamp, signature, _settings.RecvWindow);
         }
 
         /// <summary>
         /// Places order for category, symbol, side, order type and quantity with optional price, timeInforce and reduceOnly
         /// </summary>
-        internal static async Task<ApiResponse<PlaceOrderResult>?> PlaceOrder(string category, string symbol, string side, string orderType, string qty, string price = "0", string timeInForce = "PostOnly", bool reduceOnly = false)
+        internal static async Task<ApiResponse<OrderResult, object>?> PlaceOrder(string category, string symbol, string side, string orderType, string qty, string? price = "0", string timeInForce = "PostOnly", bool reduceOnly = false)
         {
-            string uri = BuildUri(_settings.Endpoint, ApiParams.EndpointProduct.Order, ApiParams.EndpointModule.Create);
+            string uri = BuildUri(_settings.Endpoint, EndpointProduct.Order, EndpointModule.Create);
 
             Dictionary<string, object> parameters = new()
                 {
-                    {nameof(category),category},
-                    {nameof(symbol),symbol.ToUpper()},
-                    {nameof(side),side},
-                    {nameof(orderType),orderType},
-                    {nameof(qty),qty},
-                    {nameof(price),price},
-                    {nameof(timeInForce),timeInForce},
-                    {nameof(reduceOnly),reduceOnly}
+                    {nameof(category), category},
+                    {nameof(symbol), symbol.ToUpper()},
+                    {nameof(side), side},
+                    {nameof(orderType), orderType},
+                    {nameof(qty), qty},
+                    {nameof(price), price},
+                    {nameof(timeInForce), timeInForce},
+                    {nameof(reduceOnly), reduceOnly}
                 };
 
-            string timestap = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
-            string signature = GenerateSignature(_settings, timestap, parameters);
-            string jsonPayload = JsonConvert.SerializeObject(parameters);
+            string timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
+            string jsonPayload = JsonConvert.SerializeObject(parameters, _jsonSerializerSettings);
+            string signature = GenerateSignature(_settings, timestamp, jsonPayload);
 
-            return await _baseHttpClient.PostAsync<ApiResponse<PlaceOrderResult>?>(uri, jsonPayload, _settings.APIKey, timestap, signature, _settings.RecvWindow);
+            return await _baseHttpClient.PostAsync<ApiResponse<OrderResult, object>?>(uri, jsonPayload, _settings.APIKey, timestamp, signature, _settings.RecvWindow);
         }
 
         /// <summary>
-        /// Loads settings from the settings file and verifies all properties are present
+        /// Batch places orders
+        /// </summary>
+        internal static async Task<ApiResponse<BatchOrderResult, BatchOrderRetExtInfo>?> BatchPlaceOrder(ApiRequest<BatchOrderRequest> request)
+        {
+            string uri = BuildUri(_settings.Endpoint, EndpointProduct.Order, EndpointModule.CreateBatch);
+
+            Dictionary<string, object> parameters = [];
+
+            foreach (PropertyInfo property in request.GetType().GetProperties())
+            {
+                object? value = property.GetValue(request);
+
+                if (value is not null && (value is not string stringValue || !string.IsNullOrEmpty(stringValue)))
+                    parameters[property.Name.ToLower()] = value;
+            }
+
+            string timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
+            string jsonPayload = JsonConvert.SerializeObject(parameters, _jsonSerializerSettings);
+            string signature = GenerateSignature(_settings, timestamp, jsonPayload);
+
+            return await _baseHttpClient.PostAsync<ApiResponse<BatchOrderResult, BatchOrderRetExtInfo>?>(uri, jsonPayload, _settings.APIKey, timestamp, signature, _settings.RecvWindow);
+        }
+
+        /// <summary>
+        /// Loads settings from the settings file and verifies all properties are present and of the correct type
         /// </summary>
         internal static Settings LoadSettings()
         {
@@ -134,34 +186,18 @@ namespace BybitPerpetualsTradingBot
             // Verifies all properties are present and of the correct type in the settings file
             static Settings VerifySettings(string jsonContent = "")
             {
-                bool updateFile = false;
-
                 Dictionary<string, object?> settingsMap = string.IsNullOrEmpty(jsonContent)
                     ? []
                     : JsonConvert.DeserializeObject<Dictionary<string, object?>>(jsonContent) ?? [];
 
                 foreach (PropertyInfo property in typeof(Settings).GetProperties())
-                {
-                    if (!settingsMap.TryGetValue(property.Name, out object? value) ||
-                        value == null ||
-                        !property.PropertyType.IsAssignableFrom(value?.GetType()))
-                    {
+                    if (!settingsMap.TryGetValue(property.Name, out object? value) || value is null || !property.PropertyType.IsAssignableFrom(value?.GetType()))
                         settingsMap[property.Name] = property.GetValue(new Settings());
-                        updateFile = true;
-                    }
-                }
 
-                if (updateFile)
-                {
-                    string updatedJson = JsonConvert.SerializeObject(settingsMap, Formatting.Indented);
-                    File.WriteAllText(_settingsFilePath, updatedJson);
+                string settingsJson = JsonConvert.SerializeObject(settingsMap, Formatting.Indented);
+                File.WriteAllText(_settingsFilePath, settingsJson);
 
-                    return JsonConvert.DeserializeObject<Settings>(updatedJson) ?? new();
-                }
-                else
-                {
-                    return JsonConvert.DeserializeObject<Settings>(jsonContent) ?? new();
-                }
+                return JsonConvert.DeserializeObject<Settings>(settingsJson) ?? new();
             }
         }
 
@@ -180,22 +216,11 @@ namespace BybitPerpetualsTradingBot
         }
 
         /// <summary>
-        /// Generates signature for GET with query
+        /// Generates signature with data
         /// </summary>
-        private static string GenerateSignature(Settings settings, string timestap, string query) =>
-            GenerateSignatureBase(settings, string.Concat(timestap, settings.APIKey, settings.RecvWindow, query));
-
-        /// <summary>
-        /// Generates signature for POST with parameters
-        /// </summary>
-        private static string GenerateSignature(Settings settings, string timestap, IDictionary<string, object> parameters) =>
-            GenerateSignatureBase(settings, string.Concat(timestap, settings.APIKey, settings.RecvWindow, JsonConvert.SerializeObject(parameters)));
-
-        /// <summary>
-        /// Generates signature with raw data
-        /// </summary>
-        private static string GenerateSignatureBase(Settings settings, string rawData)
+        private static string GenerateSignature(Settings settings, string timestamp, string data)
         {
+            string rawData = string.Concat(timestamp, settings.APIKey, settings.RecvWindow, data);
             using HMACSHA256 hmac = new(Encoding.UTF8.GetBytes(settings.APISecret));
             byte[] signature = hmac.ComputeHash(Encoding.UTF8.GetBytes(rawData));
 
