@@ -20,7 +20,7 @@ namespace BybitPerpetualsTradingBot
             serviceCollection.AddSingleton<BaseHttpClient>();
             serviceCollection.AddSingleton<TradingBot>();
 
-            Settings settings = TradingBotHelper.LoadSettings();
+            Settings settings = TradingBotHelper.LoadFileData<Settings>(TradingBotHelper.settingsFilePath);
             ConfigureSerilog(settings);
             serviceCollection.AddLogging(loggingBuilder => loggingBuilder.AddSerilog(dispose: true));
         }

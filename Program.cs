@@ -1,125 +1,50 @@
-﻿using BybitPerpetualsTradingBot.Models.API;
+﻿using BybitPerpetualsTradingBot.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using static BybitPerpetualsTradingBot.Models.API.ApiParameters;
+using System.Globalization;
 
 namespace BybitPerpetualsTradingBot
 {
     internal sealed class TradingBot(ILogger<TradingBot> logger)
     {
         private readonly ILogger<TradingBot> _logger = logger;
+        private readonly SemaphoreSlim semaphoreSlim = new(1, 1);
+        private TradingBotState _state = new();
 
         static async Task Main()
         {
+            CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
+
             ServiceCollection serviceCollection = new();
             ConfigureServices.AddServices(serviceCollection);
             ServiceProvider serviceProvider = serviceCollection.BuildServiceProvider();
 
             TradingBot tradingBot = serviceProvider.GetRequiredService<TradingBot>();
-            TradingBotHelper.InitializeDependencies(serviceProvider.GetRequiredService<BaseHttpClient>());
+            TradingBotHelper.InitializeDependencies(serviceProvider.GetRequiredService<BaseHttpClient>(), tradingBot._logger);
 
-            //Get Instruments Info
-            ApiResponse<GetInstrumentsInfoResult, object>? responseInstrumentsInfo = await TradingBotHelper.GetInstrumentsInfo(Category.Linear);
-            Console.WriteLine($"InstrumentsInfo - Code: {responseInstrumentsInfo?.RetCode}, Message: {responseInstrumentsInfo?.RetMsg}");
-            if (responseInstrumentsInfo?.RetCode != 0)
-                tradingBot._logger.LogError("Error getting instruments info: {RetMsg}", responseInstrumentsInfo?.RetMsg);
-
-            Dictionary<string, GetInstrumentsInfoResult.InstrumentList>? responseInstrumentsInfoDictionary = responseInstrumentsInfo?.Result?.List?.ToDictionary(List => List.Symbol ?? "", List => List);
-            Console.WriteLine(responseInstrumentsInfoDictionary?["BTCUSDT"]?.LotSizeFilter?.MinOrderQty);
-
-            //Get Position Info
-            ApiResponse<GetPositionInfoResult, object>? responseGetPositionInfo = await TradingBotHelper.GetPositionInfo(Category.Linear, "BTCUSDT");
-            Console.WriteLine($"PositionInfo - Code: {responseGetPositionInfo?.RetCode}, Message: {responseGetPositionInfo?.RetMsg}");
-            if (responseGetPositionInfo?.RetCode != 0)
-                tradingBot._logger.LogError("Error getting position info: {RetMsg}", responseGetPositionInfo?.RetMsg);
-
-            //Get Open and Closed Orders
-            ApiResponse<GetOpenAndClosedOrdersResult, object>? responseGetOpenAndClosedOrders = await TradingBotHelper.GetOpenAndClosedOrders(Category.Linear, "BTCUSDT", OpenOnly.True);
-            Console.WriteLine($"OpenAndClosedOrders - Code: {responseGetOpenAndClosedOrders?.RetCode}, Message: {responseGetOpenAndClosedOrders?.RetMsg}");
-            if (responseGetOpenAndClosedOrders?.RetCode != 0)
-                tradingBot._logger.LogError("Error getting open and closed orders: {RetMsg}", responseGetOpenAndClosedOrders?.RetMsg);
-
-            //Set Leverage
-            ApiResponse<object, object>? responseSetLeverage = await TradingBotHelper.SetLeverage(Category.Linear, "BTCUSDT", "100", "100");
-            Console.WriteLine($"SetLeverage - Code: {responseSetLeverage?.RetCode}, Message:{responseSetLeverage?.RetMsg}");
-            if (responseSetLeverage?.RetCode != 0 && responseSetLeverage?.RetCode != 110043)
-                tradingBot._logger.LogError("Error setting leverage: {RetMsg}", responseSetLeverage?.RetMsg);
-
-            //Place Order
-            ApiResponse<OrderResult, object>? responsePlaceOrder = await TradingBotHelper.PlaceOrder(Category.Linear, "BTCUSDT", Side.Buy, OrderType.Limit, "0.001", "40000");
-            Console.WriteLine($"PlaceOrder - Code: {responsePlaceOrder?.RetCode}, Message: {responsePlaceOrder?.RetMsg}");
-            if (responsePlaceOrder?.RetCode != 0)
-                tradingBot._logger.LogError("Error placing order: {RetMsg}", responsePlaceOrder?.RetMsg);
-
-            //Batch Place Order
-            ApiRequest<BatchOrderRequest> batchOrderRequest = new()
+            while (true)
             {
-                Category = Category.Linear,
-                Request =
-                [
-                    new()
+                try
+                {
+                    await tradingBot.semaphoreSlim.WaitAsync();
+
+                    if (!tradingBot._state.InitializeActiveTradingPairs)
                     {
-                        Symbol = "BTCUSDT",
-                        Side = Side.Buy,
-                        OrderType = OrderType.Limit,
-                        Qty = "0.001",
-                        Price = "50000",
-                        TimeInForce = TimeInForce.GoodTillCancel
-                    },
-                    new()
-                    {
-                        Symbol = "BTCUSDT",
-                        Side = Side.Buy,
-                        OrderType = OrderType.Limit,
-                        Qty = "0.001",
-                        Price = "60000",
-                        TimeInForce = TimeInForce.FillOrKill
-                    },
-                    new()
-                    {
-                        Symbol = "BTCUSDT",
-                        Side = Side.Buy,
-                        OrderType = OrderType.Limit,
-                        Qty = "0.001",
-                        Price = "70000",
-                        TimeInForce = TimeInForce.ImmediateOrCancel
-                    },
-                    new()
-                    {
-                        Symbol = "BTCUSDT",
-                        Side = Side.Buy,
-                        OrderType = OrderType.Limit,
-                        Qty = "0.001",
-                        Price = "80000",
-                        TimeInForce = TimeInForce.PostOnly
+                        tradingBot._state.InitializeActiveTradingPairs = await TradingBotHelper.InitializeActiveTradingPairs();
                     }
-                ]
-            };
 
-            ApiResponse<BatchOrderResult, BatchOrderRetExtInfo>? responseBatchPlaceOrder = await TradingBotHelper.BatchPlaceOrder(batchOrderRequest);
-            Console.WriteLine($"BatchPlaceOrder - Code: {responseBatchPlaceOrder?.RetCode}, Message: {responseBatchPlaceOrder?.RetMsg}");
-            if (responseBatchPlaceOrder?.RetCode != 0)
-                tradingBot._logger.LogError("Error placing batch order: {RetMsg}", responseBatchPlaceOrder?.RetMsg);
-
-            foreach (BatchOrderRetExtInfo.RetExtDetails orderRetExtDetails in responseBatchPlaceOrder?.RetExtInfo?.List ?? [])
-            {
-                if (orderRetExtDetails?.Code != 0)
-                    tradingBot._logger.LogError("Error placing order: {RetMsg}", orderRetExtDetails?.Msg);
+                    await Task.Delay(5000);
+                }
+                catch (Exception ex)
+                {
+                    tradingBot._logger.LogError(ex, "Error occurred in trading loop");
+                    Console.WriteLine($"Error occurred in trading loop: {ex.Message}");
+                }
+                finally
+                {
+                    tradingBot.semaphoreSlim.Release();
+                }
             }
-
-            //Amend Order
-            ApiResponse<OrderResult, object>? responseAmendOrder = await TradingBotHelper.AmendOrder(Category.Linear, "BTCUSDT", responseBatchPlaceOrder?.Result?.List?.Last()?.OrderId ?? "", "55000");
-            Console.WriteLine($"AmendOrder - Code: {responseAmendOrder?.RetCode}, Message: {responseAmendOrder?.RetMsg}");
-            if (responseAmendOrder?.RetCode != 0)
-                tradingBot._logger.LogError("Error amending order: {RetMsg}", responseAmendOrder?.RetMsg);
-
-            //Cancel All Orders
-            ApiResponse<CancelAllOrdersResult, object>? responseCancelAllOrders = await TradingBotHelper.CancelAllOrders(Category.Linear, "BTCUSDT");
-            Console.WriteLine($"CancelAllOrders - Code: {responseCancelAllOrders?.RetCode}, Message: {responseCancelAllOrders?.RetMsg}");
-            if (responseCancelAllOrders?.RetCode != 0)
-                tradingBot._logger.LogError("Error cancelling all orders: {RetMsg}", responseCancelAllOrders?.RetMsg);
-
-            Console.ReadLine();
         }
     }
 }

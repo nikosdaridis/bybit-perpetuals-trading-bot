@@ -1,25 +1,34 @@
 ﻿using BybitPerpetualsTradingBot.Models;
 using BybitPerpetualsTradingBot.Models.API;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
+using System.Globalization;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using static BybitPerpetualsTradingBot.Models.API.ApiParameters;
+using static BybitPerpetualsTradingBot.Models.PairsConfiguration;
 
 namespace BybitPerpetualsTradingBot
 {
     internal static partial class TradingBotHelper
     {
-        private static BaseHttpClient _baseHttpClient;
-        private static Settings _settings;
+        internal readonly static string settingsFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.json");
+        internal readonly static string pairsFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "pairs.json");
 
         // Matches route parameters in curly braces
         [GeneratedRegex(@"\{[^{}]+\}", RegexOptions.Compiled)]
         private static partial Regex RouteParameterRegex();
 
-        private readonly static string _settingsFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.json");
+        private static BaseHttpClient _baseHttpClient;
+        private static ILogger<TradingBot> _logger;
+        private static Settings _settings;
+        private static PairsConfiguration _pairsConfiguration;
+        private static Dictionary<string, GetInstrumentsInfoResult.InstrumentList>? _instrumentsInfo;
+        private static Dictionary<string, ActiveTradingPair>? _activeTradingPairs;
+
         private readonly static JsonSerializerSettings _jsonSerializerSettings = new()
         {
             ContractResolver = new DefaultContractResolver
@@ -34,17 +43,266 @@ namespace BybitPerpetualsTradingBot
         };
 
         /// <summary>
-        /// Initializes TradingBotHelper with Dependencies
+        /// Initializes TradingBotHelper with Dependencies and loads settings and pairs data
         /// </summary>
-        internal static void InitializeDependencies(BaseHttpClient baseHttpClient)
+        internal static void InitializeDependencies(BaseHttpClient baseHttpClient, ILogger<TradingBot> logger)
         {
             _baseHttpClient = baseHttpClient;
+            _logger = logger;
+
+            _settings = LoadFileData<Settings>(settingsFilePath);
+            _pairsConfiguration = LoadFileData<PairsConfiguration>(pairsFilePath);
+        }
+
+        /// <summary>
+        /// Loads data from file or creates file with default data
+        /// </summary>
+        internal static T LoadFileData<T>(string filePath) where T : new()
+        {
+            T defaultModel = new();
+
+            try
+            {
+                string jsonContent = File.ReadAllText(filePath);
+
+                if (string.IsNullOrEmpty(jsonContent))
+                {
+                    jsonContent = JsonConvert.SerializeObject(defaultModel, Formatting.Indented);
+                    File.WriteAllText(filePath, jsonContent);
+                    return defaultModel;
+                }
+
+                return JsonConvert.DeserializeObject<T>(jsonContent) ?? defaultModel;
+            }
+            catch
+            {
+                string defaultJson = JsonConvert.SerializeObject(defaultModel, Formatting.Indented);
+                File.WriteAllText(filePath, defaultJson);
+                return defaultModel;
+            }
+        }
+
+        /// <summary>
+        /// Initializes active trading pairs and validates pairs configuration data with instruments info and adds position info, open orders and sets leverage
+        /// </summary>
+        internal static async Task<bool> InitializeActiveTradingPairs()
+        {
+            ApiResponse<GetInstrumentsInfoResult, object>? responseInstrumentsInfo = await GetInstrumentsInfo(Category.Linear);
+            if (responseInstrumentsInfo?.RetCode != 0)
+            {
+                _logger.LogError("Error getting instruments info: {RetMsg}", responseInstrumentsInfo?.RetMsg);
+                Console.WriteLine($"Error getting instruments info: {responseInstrumentsInfo?.RetMsg}");
+                return false;
+            }
+
+            _instrumentsInfo = responseInstrumentsInfo?.Result?.List?.ToDictionary(List => List.Symbol ?? "", List => List);
+
+            if (_instrumentsInfo is null)
+            {
+                _logger.LogError("Instruments info is null");
+                Console.WriteLine("Instruments info is null");
+                return false;
+            }
+
+            _activeTradingPairs = [];
+
+            foreach (string pair in _pairsConfiguration.ActiveTradingPairs)
+            {
+                if (!_instrumentsInfo.TryGetValue(pair, out GetInstrumentsInfoResult.InstrumentList? instrumentList))
+                {
+                    _logger.LogError("Active trading pair {ActiveTradingPair} not found in instruments info", pair);
+                    Console.WriteLine($"Active trading pair {pair} not found in instruments info");
+                    return false;
+                }
+
+                if (instrumentList is null)
+                {
+                    _logger.LogError("Active trading pair {ActiveTradingPair} instrument list is null", pair);
+                    Console.WriteLine($"Active trading pair {pair} instrument list is null");
+                    return false;
+                }
+
+                if (!_pairsConfiguration.PairsConfigurations.TryGetValue(pair, out PairConfiguration? pairConfiguration))
+                {
+                    _logger.LogError("Active trading pair {ActiveTradingPair} not found in pairs configuration", pair);
+                    Console.WriteLine($"Active trading pair {pair} not found in pairs configuration");
+                    return false;
+                }
+
+                if (pairConfiguration is null)
+                {
+                    _logger.LogError("Active trading pair {ActiveTradingPair} configuration is null", pair);
+                    Console.WriteLine($"Active trading pair {pair} configuration is null");
+                    return false;
+                }
+
+                // Check if side is Buy or Sell
+                if (pairConfiguration.Side is not null && (pairConfiguration.Side != Side.Buy && pairConfiguration.Side != Side.Sell))
+                {
+                    _logger.LogError("Active trading pair {ActiveTradingPair} side {Side} is invalid", pair, pairConfiguration.Side);
+                    Console.WriteLine($"Active trading pair {pair} side {pairConfiguration.Side} is invalid");
+                    return false;
+                }
+
+                // Check if leverage is within expected range
+                if (pairConfiguration.Leverage is not null &&
+                    TryParseDecimal(instrumentList.LeverageFilter?.MinLeverage, out decimal minLeverage) &&
+                    TryParseDecimal(instrumentList.LeverageFilter?.MaxLeverage, out decimal maxLeverage))
+                {
+                    if (pairConfiguration.Leverage < minLeverage || pairConfiguration.Leverage > maxLeverage)
+                    {
+                        _logger.LogError("Active trading pair {ActiveTradingPair} leverage {Leverage} is not within the expected range of {MinLeverage} and {MaxLeverage}",
+                            pair, pairConfiguration.Leverage, minLeverage, maxLeverage);
+                        Console.WriteLine($"Active trading pair {pair} leverage {pairConfiguration.Leverage} is not within the expected range of {minLeverage} and {maxLeverage}");
+                        return false;
+                    }
+                }
+                else
+                {
+                    _logger.LogError("Invalid leverage value for active trading pair {ActiveTradingPair}", pair);
+                    Console.WriteLine($"Invalid leverage value for active trading pair {pair}");
+                    return false;
+                }
+
+                // Check if leverage is correct for leverage step size
+                if (pairConfiguration.Leverage is not null &&
+                    TryParseDecimal(instrumentList.LeverageFilter?.LeverageStep, out decimal leverageStep))
+                {
+                    if ((pairConfiguration.Leverage - minLeverage) % leverageStep != 0)
+                    {
+                        _logger.LogError("Active trading pair {ActiveTradingPair} leverage {Leverage} is not correct for leverage step size {LeverageStep}",
+                            pair, pairConfiguration.Leverage, leverageStep);
+                        Console.WriteLine($"Active trading pair {pair} leverage {pairConfiguration.Leverage} is not correct for leverage step size {leverageStep}");
+                        return false;
+                    }
+                }
+
+                // Check if initial quantity is within expected range
+                if (pairConfiguration.InitialQuantity is not null &&
+                    TryParseDecimal(instrumentList.LotSizeFilter?.MinOrderQty, out decimal minQty) &&
+                    TryParseDecimal(instrumentList.LotSizeFilter?.MaxOrderQty, out decimal maxQty))
+                {
+                    if (pairConfiguration.InitialQuantity < minQty || pairConfiguration.InitialQuantity > maxQty)
+                    {
+                        _logger.LogError("Active trading pair {ActiveTradingPair} initial quantity {InitialQuantity} is not within the expected range of {MinQty} and {MaxQty}",
+                            pair, pairConfiguration.InitialQuantity, minQty, maxQty);
+                        Console.WriteLine($"Active trading pair {pair} initial quantity {pairConfiguration.InitialQuantity} is not within the expected range of {minQty} and {maxQty}");
+                        return false;
+                    }
+                }
+                else
+                {
+                    _logger.LogError("Invalid initial quantity value for active trading pair {ActiveTradingPair}", pair);
+                    Console.WriteLine($"Invalid initial quantity value for active trading pair {pair}");
+                    return false;
+                }
+
+                // Check if initial quantity is correct for quantity step size
+                if (pairConfiguration.InitialQuantity is not null &&
+                    TryParseDecimal(instrumentList.LotSizeFilter?.QtyStep, out decimal qtyStep))
+                {
+                    if ((pairConfiguration.InitialQuantity - minQty) % qtyStep != 0)
+                    {
+                        _logger.LogError("Active trading pair {ActiveTradingPair} initial quantity {InitialQuantity} is not correct for quantity step size {QtyStep}",
+                            pair, pairConfiguration.InitialQuantity, qtyStep);
+                        Console.WriteLine($"Active trading pair {pair} initial quantity {pairConfiguration.InitialQuantity} is not correct for quantity step size {qtyStep}");
+                        return false;
+                    }
+                }
+
+                //Check if number of steps is more than 0
+                if (pairConfiguration.NumberOfSteps is not null && pairConfiguration.NumberOfSteps <= 0)
+                {
+                    _logger.LogError("Active trading pair {ActiveTradingPair} number of steps {NumberOfSteps} is invalid", pair, pairConfiguration.NumberOfSteps);
+                    Console.WriteLine($"Active trading pair {pair} number of steps {pairConfiguration.NumberOfSteps} is invalid");
+                    return false;
+                }
+
+                // Check if take profit percentage is more than 0
+                if (pairConfiguration.TakeProfitPercentage is not null && pairConfiguration.TakeProfitPercentage <= 0)
+                {
+                    _logger.LogError("Active trading pair {ActiveTradingPair} take profit percentage {TakeProfitPercentage} is invalid", pair, pairConfiguration.TakeProfitPercentage);
+                    Console.WriteLine($"Active trading pair {pair} take profit percentage {pairConfiguration.TakeProfitPercentage} is invalid");
+                    return false;
+                }
+
+                // Check if initial step unrealised PnL percentage is more than 0
+                if (pairConfiguration.InitialStepUnrealisedPnlPercentage is not null && pairConfiguration.InitialStepUnrealisedPnlPercentage <= 0)
+                {
+                    _logger.LogError("Active trading pair {ActiveTradingPair} initial step unrealised PnL percentage {InitialStepUnrealisedPnlPercentage} is invalid", pair, pairConfiguration.InitialStepUnrealisedPnlPercentage);
+                    Console.WriteLine($"Active trading pair {pair} initial step unrealised PnL percentage {pairConfiguration.InitialStepUnrealisedPnlPercentage} is invalid");
+                    return false;
+                }
+
+                // Check if step unrealised PnL multiplier is more than 0
+                if (pairConfiguration.StepUnrealisedPnlMultiplier is not null && pairConfiguration.StepUnrealisedPnlMultiplier <= 0)
+                {
+                    _logger.LogError("Active trading pair {ActiveTradingPair} step unrealised PnL multiplier {StepUnrealisedPnlMultiplier} is invalid", pair, pairConfiguration.StepUnrealisedPnlMultiplier);
+                    Console.WriteLine($"Active trading pair {pair} step unrealised PnL multiplier {pairConfiguration.StepUnrealisedPnlMultiplier} is invalid");
+                    return false;
+                }
+
+                // Check if step quantity multiplier is more than 0
+                if (pairConfiguration.StepQuantityMultiplier is not null && pairConfiguration.StepQuantityMultiplier <= 0)
+                {
+                    _logger.LogError("Active trading pair {ActiveTradingPair} step quantity multiplier {StepQuantityMultiplier} is invalid", pair, pairConfiguration.StepQuantityMultiplier);
+                    Console.WriteLine($"Active trading pair {pair} step quantity multiplier {pairConfiguration.StepQuantityMultiplier} is invalid");
+                    return false;
+                }
+
+                _activeTradingPairs[pair] = new ActiveTradingPair
+                {
+                    Configuration = pairConfiguration
+                };
+
+                // Get position info for active trading pair
+                ApiResponse<GetPositionInfoResult, object>? responsePositionInfo = await GetPositionInfo(Category.Linear, pair);
+                if (responsePositionInfo?.RetCode != 0)
+                {
+                    _logger.LogError("Error getting position info for active trading pair {ActiveTradingPair}: {RetMsg}", pair, responsePositionInfo?.RetMsg);
+                    Console.WriteLine($"Error getting position info for active trading pair {pair}: {responsePositionInfo?.RetMsg}");
+                    return false;
+                }
+                _activeTradingPairs[pair].Position = responsePositionInfo?.Result?.List?.FirstOrDefault() ?? new();
+
+                // Get open orders for active trading pair
+                ApiResponse<GetOpenAndClosedOrdersResult, object>? responseOpenOrders = await GetOpenAndClosedOrders(Category.Linear, pair, OpenOnly.True);
+                if (responseOpenOrders?.RetCode != 0)
+                {
+                    _logger.LogError("Error getting open orders for active trading pair {ActiveTradingPair}: {RetMsg}", pair, responseOpenOrders?.RetMsg);
+                    Console.WriteLine($"Error getting open orders for active trading pair {pair}: {responseOpenOrders?.RetMsg}");
+                    return false;
+                }
+                _activeTradingPairs[pair].Orders = responseOpenOrders?.Result?.List ?? [];
+
+                // Set leverage for active trading pair if position size is 0 or update leverage open position is true
+                if (TryParseDecimal(_activeTradingPairs[pair].Position.Size, out decimal size) && size == 0 || pairConfiguration.UpdateLeverageOpenPosition)
+                {
+                    if (TryParseDecimal(_activeTradingPairs[pair].Position.Leverage, out decimal leverage) && leverage == pairConfiguration.Leverage)
+                    {
+                        _logger.LogInformation("Leverage for active trading pair {ActiveTradingPair} is already set to {Leverage}", pair, pairConfiguration.Leverage);
+                        Console.WriteLine($"Leverage for active trading pair {pair} is already set to {pairConfiguration.Leverage}");
+                    }
+                    else
+                    {
+                        ApiResponse<object, object>? responseSetLeverage = await SetLeverage(Category.Linear, pair, _activeTradingPairs[pair].Configuration.Leverage.ToString()!, _activeTradingPairs[pair].Configuration.Leverage.ToString()!);
+                        if (responseSetLeverage?.RetCode != 0)
+                        {
+                            _logger.LogError("Error setting leverage for active trading pair {ActiveTradingPair}: {RetMsg}", pair, responseSetLeverage?.RetMsg);
+                            Console.WriteLine($"Error setting leverage for active trading pair {pair}: {responseSetLeverage?.RetMsg}");
+                            return false;
+                        }
+                    }
+                }
+            }
+
+            return true;
         }
 
         /// <summary>
         /// Gets instruments info for category and optional symbol and limit
         /// </summary>
-        internal static async Task<ApiResponse<GetInstrumentsInfoResult, object>?> GetInstrumentsInfo(string category, string symbol = "", int limit = 1000)
+        private static async Task<ApiResponse<GetInstrumentsInfoResult, object>?> GetInstrumentsInfo(string category, string symbol = "", int limit = 1000)
         {
             Dictionary<string, string> queryParams = new()
             {
@@ -67,7 +325,7 @@ namespace BybitPerpetualsTradingBot
         /// <summary>
         /// Gets position info for category and symbol
         /// </summary>
-        internal static async Task<ApiResponse<GetPositionInfoResult, object>?> GetPositionInfo(string category, string symbol)
+        private static async Task<ApiResponse<GetPositionInfoResult, object>?> GetPositionInfo(string category, string symbol)
         {
             string query = $"{nameof(category)}={category}&{nameof(symbol)}={symbol.ToUpper()}";
             string uri = BuildUri(_settings.Endpoint, EndpointProduct.Position, string.Concat(EndpointModule.List, '?', query));
@@ -81,7 +339,7 @@ namespace BybitPerpetualsTradingBot
         /// <summary>
         /// Gets open and closed orders for category, symbol and openOnly with optional limit
         /// </summary>
-        internal static async Task<ApiResponse<GetOpenAndClosedOrdersResult, object>?> GetOpenAndClosedOrders(string category, string symbol, int openOnly, int limit = 50)
+        private static async Task<ApiResponse<GetOpenAndClosedOrdersResult, object>?> GetOpenAndClosedOrders(string category, string symbol, int openOnly, int limit = 50)
         {
             string query = $"{nameof(category)}={category}&{nameof(symbol)}={symbol.ToUpper()}&{nameof(openOnly)}={openOnly}&{nameof(limit)}={limit}";
             string uri = BuildUri(_settings.Endpoint, EndpointProduct.Order, string.Concat(EndpointModule.RealTime, '?', query));
@@ -95,7 +353,7 @@ namespace BybitPerpetualsTradingBot
         /// <summary>
         /// Sets leverage for category and symbol
         /// </summary>
-        internal static async Task<ApiResponse<object, object>?> SetLeverage(string category, string symbol, string buyLeverage, string sellLeverage)
+        private static async Task<ApiResponse<object, object>?> SetLeverage(string category, string symbol, string buyLeverage, string sellLeverage)
         {
             string uri = BuildUri(_settings.Endpoint, EndpointProduct.Position, EndpointModule.SetLeverage);
 
@@ -117,7 +375,7 @@ namespace BybitPerpetualsTradingBot
         /// <summary>
         /// Places order for category, symbol, side, order type and quantity with optional price, timeInforce and reduceOnly
         /// </summary>
-        internal static async Task<ApiResponse<OrderResult, object>?> PlaceOrder(string category, string symbol, string side, string orderType, string qty, string? price = "0", string timeInForce = "PostOnly", bool reduceOnly = false)
+        private static async Task<ApiResponse<OrderResult, object>?> PlaceOrder(string category, string symbol, string side, string orderType, string qty, string price = "0", string timeInForce = "PostOnly", bool reduceOnly = false)
         {
             string uri = BuildUri(_settings.Endpoint, EndpointProduct.Order, EndpointModule.Create);
 
@@ -143,7 +401,7 @@ namespace BybitPerpetualsTradingBot
         /// <summary>
         /// Batch places orders
         /// </summary>
-        internal static async Task<ApiResponse<BatchOrderResult, BatchOrderRetExtInfo>?> BatchPlaceOrder(ApiRequest<BatchOrderRequest> request)
+        private static async Task<ApiResponse<BatchOrderResult, BatchOrderRetExtInfo>?> BatchPlaceOrder(ApiRequest<BatchOrderRequest> request)
         {
             string uri = BuildUri(_settings.Endpoint, EndpointProduct.Order, EndpointModule.CreateBatch);
 
@@ -167,7 +425,7 @@ namespace BybitPerpetualsTradingBot
         /// <summary>
         /// Amends order for category, symbol, orderId and price
         /// </summary>
-        internal static async Task<ApiResponse<OrderResult, object>?> AmendOrder(string category, string symbol, string orderId, string price)
+        private static async Task<ApiResponse<OrderResult, object>?> AmendOrder(string category, string symbol, string orderId, string price)
         {
             string uri = BuildUri(_settings.Endpoint, EndpointProduct.Order, EndpointModule.Amend);
 
@@ -189,7 +447,7 @@ namespace BybitPerpetualsTradingBot
         /// <summary>
         /// Cancels all orders for category and symbol
         /// </summary>
-        internal static async Task<ApiResponse<CancelAllOrdersResult, object>?> CancelAllOrders(string category, string symbol)
+        private static async Task<ApiResponse<CancelAllOrdersResult, object>?> CancelAllOrders(string category, string symbol)
         {
             string uri = BuildUri(_settings.Endpoint, EndpointProduct.Order, EndpointModule.CancelAll);
 
@@ -207,46 +465,9 @@ namespace BybitPerpetualsTradingBot
         }
 
         /// <summary>
-        /// Loads settings from the settings file and verifies all properties are present and of the correct type
-        /// </summary>
-        internal static Settings LoadSettings()
-        {
-            try
-            {
-                _settings = VerifySettings(File.ReadAllText(_settingsFilePath));
-            }
-            catch
-            {
-                _settings = VerifySettings();
-            }
-
-            if (string.IsNullOrEmpty(_settings?.APIKey) || string.IsNullOrEmpty(_settings?.APISecret))
-                throw new Exception("API Key or Secret not found in settings.json");
-
-            return _settings;
-
-            // Verifies all properties are present and of the correct type in the settings file
-            static Settings VerifySettings(string jsonContent = "")
-            {
-                Dictionary<string, object?> settingsMap = string.IsNullOrEmpty(jsonContent)
-                    ? []
-                    : JsonConvert.DeserializeObject<Dictionary<string, object?>>(jsonContent) ?? [];
-
-                foreach (PropertyInfo property in typeof(Settings).GetProperties())
-                    if (!settingsMap.TryGetValue(property.Name, out object? value) || value is null || !property.PropertyType.IsAssignableFrom(value?.GetType()))
-                        settingsMap[property.Name] = property.GetValue(new Settings());
-
-                string settingsJson = JsonConvert.SerializeObject(settingsMap, Formatting.Indented);
-                File.WriteAllText(_settingsFilePath, settingsJson);
-
-                return JsonConvert.DeserializeObject<Settings>(settingsJson) ?? new();
-            }
-        }
-
-        /// <summary>
         /// Builds URI from base URI, replacing route parameters with specified values
         /// </summary>
-        internal static string BuildUri(string baseUri, params string[] routeParameters)
+        private static string BuildUri(string baseUri, params string[] routeParameters)
         {
             if (routeParameters.Length == 0)
                 return baseUri;
@@ -268,5 +489,11 @@ namespace BybitPerpetualsTradingBot
 
             return Convert.ToHexStringLower(signature);
         }
+
+        /// <summary>
+        /// Converts string to decimal with decimal point and invariant culture
+        /// </summary>
+        private static bool TryParseDecimal(string? input, out decimal result) =>
+            decimal.TryParse(input, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out result);
     }
 }
