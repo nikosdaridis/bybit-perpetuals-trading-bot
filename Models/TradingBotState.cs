@@ -2,6 +2,6 @@
 {
     internal sealed class TradingBotState
     {
-        public bool InitializeActiveTradingPairs { get; set; } = false;
+        public bool InitializedActiveTradingPairs { get; set; } = false;
     }
 }

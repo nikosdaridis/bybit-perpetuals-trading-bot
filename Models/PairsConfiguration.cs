@@ -10,28 +10,28 @@
                 "BTCUSDT", new ()
                 {
                     Side = "Buy",
-                    Leverage = 50m,
+                    Leverage = 20m,
                     UpdateLeverageOpenPosition = false,
                     InitialQuantity = 0.001m,
-                    NumberOfSteps = 5,
+                    NumberOfScalingLevels = 5,
                     TakeProfitPercentage = 10m,
-                    InitialStepUnrealisedPnlPercentage = 100m,
-                    StepUnrealisedPnlMultiplier = 1.4m,
-                    StepQuantityMultiplier = 1.2m
+                    InitialScalingUnrealizedPnL = 100m,
+                    ScalingUnrealisedPnlMultiplier = 1.4m,
+                    ScalingQuantityMultiplier = 1.2m
                 }
             },
             {
                 "ETHUSDT", new ()
                 {
                     Side = "Buy",
-                    Leverage = 50m,
+                    Leverage = 20m,
                     UpdateLeverageOpenPosition = false,
                     InitialQuantity = 0.01m,
-                    NumberOfSteps = 5,
+                    NumberOfScalingLevels = 5,
                     TakeProfitPercentage = 10m,
-                    InitialStepUnrealisedPnlPercentage = 100m,
-                    StepUnrealisedPnlMultiplier = 1.4m,
-                    StepQuantityMultiplier = 1.2m
+                    InitialScalingUnrealizedPnL = 100m,
+                    ScalingUnrealisedPnlMultiplier = 1.4m,
+                    ScalingQuantityMultiplier = 1.2m
                 }
             }
         };
@@ -43,11 +43,11 @@
             public decimal? Leverage { get; set; }
             public bool UpdateLeverageOpenPosition { get; set; }
             public decimal? InitialQuantity { get; set; }
-            public int? NumberOfSteps { get; set; }
+            public int? NumberOfScalingLevels { get; set; }
             public decimal? TakeProfitPercentage { get; set; }
-            public decimal? InitialStepUnrealisedPnlPercentage { get; set; }
-            public decimal? StepUnrealisedPnlMultiplier { get; set; }
-            public decimal? StepQuantityMultiplier { get; set; }
+            public decimal? InitialScalingUnrealizedPnL { get; set; }
+            public decimal? ScalingUnrealisedPnlMultiplier { get; set; }
+            public decimal? ScalingQuantityMultiplier { get; set; }
         }
     }
 }

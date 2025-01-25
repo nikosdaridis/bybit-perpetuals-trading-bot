@@ -4,8 +4,20 @@ using System.Text;
 
 namespace BybitPerpetualsTradingBot
 {
-    internal class BaseHttpClient(HttpClient httpClient, ILogger<BaseHttpClient> logger)
+    internal class BaseHttpClient
     {
+        private readonly HttpClient _httpClient;
+        private readonly ILogger<BaseHttpClient> _logger;
+        private readonly Timer _timer;
+        private static uint _requestCount = 0;
+
+        public BaseHttpClient(HttpClient httpClient, ILogger<BaseHttpClient> logger)
+        {
+            _httpClient = httpClient;
+            _logger = logger;
+            _timer = new Timer(PrintRequestsPerSecond, null, TimeSpan.Zero, TimeSpan.FromSeconds(1));
+        }
+
         /// <summary>
         /// GET request to specified URI and returns deserialized response
         /// </summary>
@@ -44,11 +56,12 @@ namespace BybitPerpetualsTradingBot
         /// </summary>
         protected async Task<TResponse?> SendAsync<TResponse>(HttpRequestMessage request)
         {
-            using HttpResponseMessage response = await httpClient.SendAsync(request);
+            Interlocked.Increment(ref _requestCount);
+            using HttpResponseMessage response = await _httpClient.SendAsync(request);
 
             if (!response.IsSuccessStatusCode)
             {
-                logger.LogWarning("{RequestMethod} Request to {RequestUri} failed with status code {StatusCode}",
+                _logger.LogWarning("{RequestMethod} Request to {RequestUri} failed with status code {StatusCode}",
                       request.Method, request.RequestUri, response.StatusCode);
 
                 return default;
@@ -61,18 +74,27 @@ namespace BybitPerpetualsTradingBot
                 TResponse? deserializedResponse = JsonConvert.DeserializeObject<TResponse?>(content);
 
                 if (deserializedResponse is null)
-                    logger.LogWarning("Deserialization of response content returned null for {RequestMethod} request to {RequestUri}. Response content: {ResponseContent}",
+                    _logger.LogWarning("Deserialization of response content returned null for {RequestMethod} request to {RequestUri}. Response content: {ResponseContent}",
                                       request.Method, request.RequestUri, content);
 
                 return deserializedResponse ?? default;
             }
             catch (JsonException ex)
             {
-                logger.LogError(ex, "Error deserializing response content for {RequestMethod} request to {RequestUri}. Response content: {ResponseContent}",
+                _logger.LogError(ex, "Error deserializing response content for {RequestMethod} request to {RequestUri}. Response content: {ResponseContent}",
                                 request.Method, request.RequestUri, content);
 
                 return default;
             }
+        }
+
+        /// <summary>
+        /// Prints HTTP requests per second
+        /// </summary>
+        private void PrintRequestsPerSecond(object? state)
+        {
+            Console.WriteLine($"HTTP requests per second: {_requestCount}");
+            Interlocked.Exchange(ref _requestCount, 0);
         }
     }
 }

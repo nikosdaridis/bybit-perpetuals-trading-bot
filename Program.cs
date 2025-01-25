@@ -28,12 +28,14 @@ namespace BybitPerpetualsTradingBot
                 {
                     await tradingBot.semaphoreSlim.WaitAsync();
 
-                    if (!tradingBot._state.InitializeActiveTradingPairs)
-                    {
-                        tradingBot._state.InitializeActiveTradingPairs = await TradingBotHelper.InitializeActiveTradingPairs();
-                    }
+                    if (!tradingBot._state.InitializedActiveTradingPairs)
+                        tradingBot._state.InitializedActiveTradingPairs = await TradingBotHelper.InitializeActiveTradingPairs();
 
-                    await Task.Delay(5000);
+                    await TradingBotHelper.PlaceInitialPositions();
+                    await TradingBotHelper.PlaceTakeProfitOrders();
+                    //await TradingBotHelper.PlaceScalingOrders();
+
+                    await Task.Delay(2000);
                 }
                 catch (Exception ex)
                 {

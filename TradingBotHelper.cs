@@ -9,6 +9,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using static BybitPerpetualsTradingBot.Models.API.ApiParameters;
+using static BybitPerpetualsTradingBot.Models.API.GetOpenAndClosedOrdersResult;
 using static BybitPerpetualsTradingBot.Models.PairsConfiguration;
 
 namespace BybitPerpetualsTradingBot
@@ -26,8 +27,8 @@ namespace BybitPerpetualsTradingBot
         private static ILogger<TradingBot> _logger;
         private static Settings _settings;
         private static PairsConfiguration _pairsConfiguration;
-        private static Dictionary<string, GetInstrumentsInfoResult.InstrumentList>? _instrumentsInfo;
-        private static Dictionary<string, ActiveTradingPair>? _activeTradingPairs;
+        private static Dictionary<string, GetInstrumentsInfoResult.InstrumentList> _instrumentsInfo = [];
+        private static Dictionary<string, ActiveTradingPair> _activeTradingPairs = [];
 
         private readonly static JsonSerializerSettings _jsonSerializerSettings = new()
         {
@@ -43,7 +44,7 @@ namespace BybitPerpetualsTradingBot
         };
 
         /// <summary>
-        /// Initializes TradingBotHelper with Dependencies and loads settings and pairs data
+        /// Initializes TradingBotHelper with Dependencies and loads settings and pairs configurations
         /// </summary>
         internal static void InitializeDependencies(BaseHttpClient baseHttpClient, ILogger<TradingBot> logger)
         {
@@ -95,16 +96,14 @@ namespace BybitPerpetualsTradingBot
                 return false;
             }
 
-            _instrumentsInfo = responseInstrumentsInfo?.Result?.List?.ToDictionary(List => List.Symbol ?? "", List => List);
+            _instrumentsInfo = responseInstrumentsInfo?.Result?.List?.ToDictionary(List => List.Symbol ?? string.Empty, List => List) ?? [];
 
-            if (_instrumentsInfo is null)
+            if (_instrumentsInfo.Count == 0)
             {
-                _logger.LogError("Instruments info is null");
-                Console.WriteLine("Instruments info is null");
+                _logger.LogError("No instruments info found");
+                Console.WriteLine("No instruments info found");
                 return false;
             }
-
-            _activeTradingPairs = [];
 
             foreach (string pair in _pairsConfiguration.ActiveTradingPairs)
             {
@@ -177,6 +176,14 @@ namespace BybitPerpetualsTradingBot
                     }
                 }
 
+                // Check if update leverage open position is true or false
+                if (pairConfiguration.UpdateLeverageOpenPosition != true && pairConfiguration.UpdateLeverageOpenPosition != false)
+                {
+                    _logger.LogError("Active trading pair {ActiveTradingPair} update leverage open position {UpdateLeverageOpenPosition} is invalid", pair, pairConfiguration.UpdateLeverageOpenPosition);
+                    Console.WriteLine($"Active trading pair {pair} update leverage open position {pairConfiguration.UpdateLeverageOpenPosition} is invalid");
+                    return false;
+                }
+
                 // Check if initial quantity is within expected range
                 if (pairConfiguration.InitialQuantity is not null &&
                     TryParseDecimal(instrumentList.LotSizeFilter?.MinOrderQty, out decimal minQty) &&
@@ -211,10 +218,10 @@ namespace BybitPerpetualsTradingBot
                 }
 
                 //Check if number of steps is more than 0
-                if (pairConfiguration.NumberOfSteps is not null && pairConfiguration.NumberOfSteps <= 0)
+                if (pairConfiguration.NumberOfScalingLevels is not null && pairConfiguration.NumberOfScalingLevels <= 0)
                 {
-                    _logger.LogError("Active trading pair {ActiveTradingPair} number of steps {NumberOfSteps} is invalid", pair, pairConfiguration.NumberOfSteps);
-                    Console.WriteLine($"Active trading pair {pair} number of steps {pairConfiguration.NumberOfSteps} is invalid");
+                    _logger.LogError("Active trading pair {ActiveTradingPair} number of steps {NumberOfSteps} is invalid", pair, pairConfiguration.NumberOfScalingLevels);
+                    Console.WriteLine($"Active trading pair {pair} number of steps {pairConfiguration.NumberOfScalingLevels} is invalid");
                     return false;
                 }
 
@@ -227,33 +234,33 @@ namespace BybitPerpetualsTradingBot
                 }
 
                 // Check if initial step unrealised PnL percentage is more than 0
-                if (pairConfiguration.InitialStepUnrealisedPnlPercentage is not null && pairConfiguration.InitialStepUnrealisedPnlPercentage <= 0)
+                if (pairConfiguration.InitialScalingUnrealizedPnL is not null && pairConfiguration.InitialScalingUnrealizedPnL <= 0)
                 {
-                    _logger.LogError("Active trading pair {ActiveTradingPair} initial step unrealised PnL percentage {InitialStepUnrealisedPnlPercentage} is invalid", pair, pairConfiguration.InitialStepUnrealisedPnlPercentage);
-                    Console.WriteLine($"Active trading pair {pair} initial step unrealised PnL percentage {pairConfiguration.InitialStepUnrealisedPnlPercentage} is invalid");
+                    _logger.LogError("Active trading pair {ActiveTradingPair} initial step unrealised PnL percentage {InitialStepUnrealisedPnlPercentage} is invalid", pair, pairConfiguration.InitialScalingUnrealizedPnL);
+                    Console.WriteLine($"Active trading pair {pair} initial step unrealised PnL percentage {pairConfiguration.InitialScalingUnrealizedPnL} is invalid");
                     return false;
                 }
 
                 // Check if step unrealised PnL multiplier is more than 0
-                if (pairConfiguration.StepUnrealisedPnlMultiplier is not null && pairConfiguration.StepUnrealisedPnlMultiplier <= 0)
+                if (pairConfiguration.ScalingUnrealisedPnlMultiplier is not null && pairConfiguration.ScalingUnrealisedPnlMultiplier <= 0)
                 {
-                    _logger.LogError("Active trading pair {ActiveTradingPair} step unrealised PnL multiplier {StepUnrealisedPnlMultiplier} is invalid", pair, pairConfiguration.StepUnrealisedPnlMultiplier);
-                    Console.WriteLine($"Active trading pair {pair} step unrealised PnL multiplier {pairConfiguration.StepUnrealisedPnlMultiplier} is invalid");
+                    _logger.LogError("Active trading pair {ActiveTradingPair} step unrealised PnL multiplier {StepUnrealisedPnlMultiplier} is invalid", pair, pairConfiguration.ScalingUnrealisedPnlMultiplier);
+                    Console.WriteLine($"Active trading pair {pair} step unrealised PnL multiplier {pairConfiguration.ScalingUnrealisedPnlMultiplier} is invalid");
                     return false;
                 }
 
                 // Check if step quantity multiplier is more than 0
-                if (pairConfiguration.StepQuantityMultiplier is not null && pairConfiguration.StepQuantityMultiplier <= 0)
+                if (pairConfiguration.ScalingQuantityMultiplier is not null && pairConfiguration.ScalingQuantityMultiplier <= 0)
                 {
-                    _logger.LogError("Active trading pair {ActiveTradingPair} step quantity multiplier {StepQuantityMultiplier} is invalid", pair, pairConfiguration.StepQuantityMultiplier);
-                    Console.WriteLine($"Active trading pair {pair} step quantity multiplier {pairConfiguration.StepQuantityMultiplier} is invalid");
+                    _logger.LogError("Active trading pair {ActiveTradingPair} step quantity multiplier {StepQuantityMultiplier} is invalid", pair, pairConfiguration.ScalingQuantityMultiplier);
+                    Console.WriteLine($"Active trading pair {pair} step quantity multiplier {pairConfiguration.ScalingQuantityMultiplier} is invalid");
                     return false;
                 }
 
-                _activeTradingPairs[pair] = new ActiveTradingPair
+                _activeTradingPairs.TryAdd(pair, new()
                 {
                     Configuration = pairConfiguration
-                };
+                });
 
                 // Get position info for active trading pair
                 ApiResponse<GetPositionInfoResult, object>? responsePositionInfo = await GetPositionInfo(Category.Linear, pair);
@@ -298,6 +305,117 @@ namespace BybitPerpetualsTradingBot
 
             return true;
         }
+
+        /// <summary>
+        /// Places initial positions for active trading pairs if position size is 0
+        /// </summary>
+        internal static async Task<bool> PlaceInitialPositions()
+        {
+            foreach ((string Symbol, ActiveTradingPair ActiveTradingPair) in _activeTradingPairs)
+            {
+                // Get and update position info
+                ApiResponse<GetPositionInfoResult, object>? responsePositionInfo = await GetPositionInfo(Category.Linear, Symbol);
+                if (responsePositionInfo?.RetCode != 0)
+                {
+                    _logger.LogError("Error getting position info for active trading pair {ActiveTradingPair}: {RetMsg}", Symbol, responsePositionInfo?.RetMsg);
+                    Console.WriteLine($"Error getting position info for active trading pair {Symbol}: {responsePositionInfo?.RetMsg}");
+                    return false;
+                }
+                ActiveTradingPair.Position.Size = responsePositionInfo?.Result?.List?.FirstOrDefault()?.Size;
+
+                // Check if position size is 0 to place initial order
+                if (TryParseDecimal(ActiveTradingPair.Position.Size, out decimal size) && size != 0)
+                    continue;
+
+                if (string.IsNullOrEmpty(ActiveTradingPair.Configuration.Side))
+                {
+                    _logger.LogError("Active trading pair {ActiveTradingPair} side is not set", Symbol);
+                    Console.WriteLine($"Active trading pair {Symbol} side is not set");
+                    return false;
+                }
+
+                string initialQuantity;
+                if (ActiveTradingPair.Configuration.InitialQuantity.ToString() is { } initQuantity && string.IsNullOrEmpty(initQuantity))
+                {
+                    _logger.LogError("Active trading pair {ActiveTradingPair} initial quantity is not set", Symbol);
+                    Console.WriteLine($"Active trading pair {Symbol} initial quantity is not set");
+                    return false;
+                }
+                initialQuantity = ActiveTradingPair.Configuration.InitialQuantity.ToString()!;
+
+                // Place initial order
+                ApiResponse<OrderResult, object>? responsePlaceOrder = await PlaceOrder(Category.Linear, Symbol, ActiveTradingPair.Configuration.Side, OrderType.Market, initialQuantity);
+                if (responsePlaceOrder?.RetCode != 0)
+                {
+                    _logger.LogError("Error placing initial order for active trading pair {ActiveTradingPair}: {RetMsg}", Symbol, responsePlaceOrder?.RetMsg);
+                    Console.WriteLine($"Error placing initial order for active trading pair {Symbol}: {responsePlaceOrder?.RetMsg}");
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Places take profit orders for active trading pairs if position size is more than 0 and no open orders
+        /// </summary>
+        internal static async Task<bool> PlaceTakeProfitOrders()
+        {
+            foreach ((string Symbol, ActiveTradingPair ActiveTradingPair) in _activeTradingPairs)
+            {
+                // Get and update position info
+                ApiResponse<GetPositionInfoResult, object>? responsePositionInfo = await GetPositionInfo(Category.Linear, Symbol);
+                if (responsePositionInfo?.RetCode != 0)
+                {
+                    _logger.LogError("Error getting position info for active trading pair {ActiveTradingPair}: {RetMsg}", Symbol, responsePositionInfo?.RetMsg);
+                    Console.WriteLine($"Error getting position info for active trading pair {Symbol}: {responsePositionInfo?.RetMsg}");
+                    return false;
+                }
+                ActiveTradingPair.Position = responsePositionInfo?.Result?.List?.FirstOrDefault() ?? new();
+
+                // Check if position size is more than 0 to place reduce only order
+                if (TryParseDecimal(ActiveTradingPair.Position.Size, out decimal size) && size <= 0)
+                    continue;
+
+                // Check if there are open orders
+                ApiResponse<GetOpenAndClosedOrdersResult, object>? responseOpenOrders = await GetOpenAndClosedOrders(Category.Linear, Symbol, OpenOnly.True);
+                if (responseOpenOrders?.RetCode != 0)
+                {
+                    _logger.LogError("Error getting open orders for active trading pair {ActiveTradingPair}: {RetMsg}", Symbol, responseOpenOrders?.RetMsg);
+                    Console.WriteLine($"Error getting open orders for active trading pair {Symbol}: {responseOpenOrders?.RetMsg}");
+                    return false;
+                }
+                if (responseOpenOrders.Result?.List?.Any(order => order.ReduceOnly.GetValueOrDefault()) == true)
+                    continue;
+                else
+                    ActiveTradingPair.Orders = [];
+
+                if (TryParseDecimal(ActiveTradingPair.Position.AvgPrice, out decimal averagePrice) && averagePrice <= 0)
+                {
+                    _logger.LogError("Error parsing average price for active trading pair {Symbol}", Symbol);
+                    Console.WriteLine($"Error parsing average price for active trading pair {Symbol}");
+                    return false;
+                }
+
+                string reduceOnlySide = ActiveTradingPair.Configuration.Side == Side.Buy ? Side.Sell : Side.Buy;
+                string takeProfitPrice = (averagePrice * (1 + (ActiveTradingPair.Configuration.TakeProfitPercentage!.Value / (100 * ActiveTradingPair.Configuration.Leverage!.Value)))).ToString();
+
+
+                // Place take profit order with reduce only
+                ApiResponse<OrderResult, object>? responsePlaceOrder = await PlaceOrder(Category.Linear, Symbol, reduceOnlySide, OrderType.Limit, "0", takeProfitPrice, TimeInForce.PostOnly, true);
+                if (responsePlaceOrder?.RetCode != 0)
+                {
+                    _logger.LogError("Error placing reduce only order for active trading pair {ActiveTradingPair}: {RetMsg}", Symbol, responsePlaceOrder?.RetMsg);
+                    Console.WriteLine($"Error placing reduce only order for active trading pair {Symbol}: {responsePlaceOrder?.RetMsg}");
+                    return false;
+                }
+                ActiveTradingPair.Orders.Add(new GetOpenAndClosedOrdersList() { OrderId = responsePlaceOrder.Result?.OrderId });
+            }
+
+            return true;
+        }
+
+        // Place Scaling Orders
 
         /// <summary>
         /// Gets instruments info for category and optional symbol and limit
