@@ -12,6 +12,7 @@
         internal sealed class EndpointModule
         {
             public const string InstrumentsInfo = "instruments-info";
+            public const string Tickers = "tickers";
             public const string List = "list";
             public const string RealTime = "realtime";
             public const string SetLeverage = "set-leverage";

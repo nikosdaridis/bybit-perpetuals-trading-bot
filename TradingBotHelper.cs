@@ -9,7 +9,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using static BybitPerpetualsTradingBot.Models.API.ApiParameters;
-using static BybitPerpetualsTradingBot.Models.API.GetOpenAndClosedOrdersResult;
+using static BybitPerpetualsTradingBot.Models.API.GetTickersResult;
 using static BybitPerpetualsTradingBot.Models.PairsConfiguration;
 
 namespace BybitPerpetualsTradingBot
@@ -176,14 +176,6 @@ namespace BybitPerpetualsTradingBot
                     }
                 }
 
-                // Check if update leverage open position is true or false
-                if (pairConfiguration.UpdateLeverageOpenPosition != true && pairConfiguration.UpdateLeverageOpenPosition != false)
-                {
-                    _logger.LogError("Active trading pair {ActiveTradingPair} update leverage open position {UpdateLeverageOpenPosition} is invalid", pair, pairConfiguration.UpdateLeverageOpenPosition);
-                    Console.WriteLine($"Active trading pair {pair} update leverage open position {pairConfiguration.UpdateLeverageOpenPosition} is invalid");
-                    return false;
-                }
-
                 // Check if initial quantity is within expected range
                 if (pairConfiguration.InitialQuantity is not null &&
                     TryParseDecimal(instrumentList.LotSizeFilter?.MinOrderQty, out decimal minQty) &&
@@ -262,7 +254,7 @@ namespace BybitPerpetualsTradingBot
                     Configuration = pairConfiguration
                 });
 
-                // Get position info for active trading pair
+                // Get position info
                 ApiResponse<GetPositionInfoResult, object>? responsePositionInfo = await GetPositionInfo(Category.Linear, pair);
                 if (responsePositionInfo?.RetCode != 0)
                 {
@@ -271,6 +263,27 @@ namespace BybitPerpetualsTradingBot
                     return false;
                 }
                 _activeTradingPairs[pair].Position = responsePositionInfo?.Result?.List?.FirstOrDefault() ?? new();
+
+                // Get tickers
+                ApiResponse<GetTickersResult, object>? responseTickers = await GetTickers(Category.Linear, pair);
+                if (responseTickers?.RetCode != 0)
+                {
+                    _logger.LogError("Error getting tickers for active trading pair {ActiveTradingPair}: {RetMsg}", pair, responseTickers?.RetMsg);
+                    Console.WriteLine($"Error getting tickers for active trading pair {pair}: {responseTickers?.RetMsg}");
+                    return false;
+                }
+
+                // Check if price and quantity is more than min notional value
+                if (TryParseDecimal(instrumentList.LotSizeFilter?.MinNotionalValue, out decimal minNotionalValue) &&
+                    TryParseDecimal(responseTickers.Result?.List?.FirstOrDefault()?.LastPrice, out decimal lastPrice) &&
+                    lastPrice * pairConfiguration.InitialQuantity.GetValueOrDefault() < minNotionalValue)
+                {
+                    decimal notionalValue = lastPrice * pairConfiguration.InitialQuantity.GetValueOrDefault();
+                    _logger.LogError("Active trading pair {ActiveTradingPair} initial quantity {InitialQuantity} * latest price {LastPrice} results in notional value {NotionalValue}, which is less than the min notional value {MinNotionalValue}",
+                        pair, pairConfiguration.InitialQuantity, lastPrice, notionalValue, minNotionalValue);
+                    Console.WriteLine($"Active trading pair {pair} initial quantity {pairConfiguration.InitialQuantity} * latest price {lastPrice} results in notional value {notionalValue}, which is less than the min notional value {minNotionalValue}");
+                    return false;
+                }
 
                 // Get open orders for active trading pair
                 ApiResponse<GetOpenAndClosedOrdersResult, object>? responseOpenOrders = await GetOpenAndClosedOrders(Category.Linear, pair, OpenOnly.True);
@@ -281,26 +294,6 @@ namespace BybitPerpetualsTradingBot
                     return false;
                 }
                 _activeTradingPairs[pair].Orders = responseOpenOrders?.Result?.List ?? [];
-
-                // Set leverage for active trading pair if position size is 0 or update leverage open position is true
-                if (TryParseDecimal(_activeTradingPairs[pair].Position.Size, out decimal size) && size == 0 || pairConfiguration.UpdateLeverageOpenPosition)
-                {
-                    if (TryParseDecimal(_activeTradingPairs[pair].Position.Leverage, out decimal leverage) && leverage == pairConfiguration.Leverage)
-                    {
-                        _logger.LogInformation("Leverage for active trading pair {ActiveTradingPair} is already set to {Leverage}", pair, pairConfiguration.Leverage);
-                        Console.WriteLine($"Leverage for active trading pair {pair} is already set to {pairConfiguration.Leverage}");
-                    }
-                    else
-                    {
-                        ApiResponse<object, object>? responseSetLeverage = await SetLeverage(Category.Linear, pair, _activeTradingPairs[pair].Configuration.Leverage.ToString()!, _activeTradingPairs[pair].Configuration.Leverage.ToString()!);
-                        if (responseSetLeverage?.RetCode != 0)
-                        {
-                            _logger.LogError("Error setting leverage for active trading pair {ActiveTradingPair}: {RetMsg}", pair, responseSetLeverage?.RetMsg);
-                            Console.WriteLine($"Error setting leverage for active trading pair {pair}: {responseSetLeverage?.RetMsg}");
-                            return false;
-                        }
-                    }
-                }
             }
 
             return true;
@@ -313,7 +306,7 @@ namespace BybitPerpetualsTradingBot
         {
             foreach ((string Symbol, ActiveTradingPair ActiveTradingPair) in _activeTradingPairs)
             {
-                // Get and update position info
+                // Get position info
                 ApiResponse<GetPositionInfoResult, object>? responsePositionInfo = await GetPositionInfo(Category.Linear, Symbol);
                 if (responsePositionInfo?.RetCode != 0)
                 {
@@ -321,30 +314,99 @@ namespace BybitPerpetualsTradingBot
                     Console.WriteLine($"Error getting position info for active trading pair {Symbol}: {responsePositionInfo?.RetMsg}");
                     return false;
                 }
-                ActiveTradingPair.Position.Size = responsePositionInfo?.Result?.List?.FirstOrDefault()?.Size;
+                ActiveTradingPair.Position = responsePositionInfo?.Result?.List?.FirstOrDefault() ?? new();
 
                 // Check if position size is 0 to place initial order
-                if (TryParseDecimal(ActiveTradingPair.Position.Size, out decimal size) && size != 0)
+                if (!TryParseDecimal(ActiveTradingPair.Position.Size, out decimal size) || size != 0)
                     continue;
 
-                if (string.IsNullOrEmpty(ActiveTradingPair.Configuration.Side))
+                // Get open orders
+                ApiResponse<GetOpenAndClosedOrdersResult, object>? responseOpenOrders = await GetOpenAndClosedOrders(Category.Linear, Symbol, OpenOnly.True);
+                if (responseOpenOrders?.RetCode != 0)
                 {
-                    _logger.LogError("Active trading pair {ActiveTradingPair} side is not set", Symbol);
-                    Console.WriteLine($"Active trading pair {Symbol} side is not set");
+                    _logger.LogError("Error getting open orders for active trading pair {ActiveTradingPair}: {RetMsg}", Symbol, responseOpenOrders?.RetMsg);
+                    Console.WriteLine($"Error getting open orders for active trading pair {Symbol}: {responseOpenOrders?.RetMsg}");
                     return false;
                 }
 
-                string initialQuantity;
-                if (ActiveTradingPair.Configuration.InitialQuantity.ToString() is { } initQuantity && string.IsNullOrEmpty(initQuantity))
+                // Get tickers
+                ApiResponse<GetTickersResult, object>? responseTickers = await GetTickers(Category.Linear, Symbol);
+                if (responseTickers?.RetCode != 0)
                 {
-                    _logger.LogError("Active trading pair {ActiveTradingPair} initial quantity is not set", Symbol);
-                    Console.WriteLine($"Active trading pair {Symbol} initial quantity is not set");
+                    _logger.LogError("Error getting tickers for active trading pair {ActiveTradingPair}: {RetMsg}", Symbol, responseTickers?.RetMsg);
+                    Console.WriteLine($"Error getting tickers for active trading pair {Symbol}: {responseTickers?.RetMsg}");
                     return false;
                 }
-                initialQuantity = ActiveTradingPair.Configuration.InitialQuantity.ToString()!;
+
+                // Check if there is open order with price close to last price within 6 tick size to wait for it to be filled
+                if (responseOpenOrders.Result?.List?.Any(order =>
+                {
+                    if (TryParseDecimal(order.Price, out decimal orderPrice) &&
+                        TryParseDecimal(responseTickers.Result?.List?.FirstOrDefault()?.LastPrice, out decimal lastPrice) &&
+                        TryParseDecimal(_instrumentsInfo[Symbol].PriceFilter?.TickSize, out decimal tickSize))
+                    {
+                        return Math.Abs(orderPrice - lastPrice) < 6 * tickSize;
+                    }
+
+                    return false;
+                }) == true)
+                    continue;
+
+                // Cancel all orders
+                ApiResponse<CancelAllOrdersResult, object>? responseCancelAll = await CancelAllOrders(Category.Linear, Symbol);
+                if (responseCancelAll?.RetCode != 0)
+                {
+                    _logger.LogError("Error cancelling all orders for active trading pair {ActiveTradingPair}: {RetMsg}", Symbol, responseCancelAll?.RetMsg);
+                    Console.WriteLine($"Error cancelling all orders for active trading pair {Symbol}: {responseCancelAll?.RetMsg}");
+                    return false;
+                }
+                ActiveTradingPair.Orders = [];
+
+                if (!TryParseDecimal(ActiveTradingPair.Position.Leverage, out decimal leverage))
+                {
+                    _logger.LogError("Error parsing leverage for active trading pair {Symbol}", Symbol);
+                    Console.WriteLine($"Error parsing leverage for active trading pair {Symbol}");
+                    return false;
+                }
+
+                // Set leverage
+                if (leverage != ActiveTradingPair.Configuration.Leverage)
+                {
+                    ApiResponse<object, object>? responseSetLeverage = await SetLeverage(Category.Linear, Symbol, ActiveTradingPair.Configuration.Leverage.ToString()!, ActiveTradingPair.Configuration.Leverage.ToString()!);
+                    if (responseSetLeverage?.RetCode != 0 && responseSetLeverage?.RetCode != 110043)
+                    {
+                        _logger.LogError("Error setting leverage for active trading pair {ActiveTradingPair}: {RetMsg}", Symbol, responseSetLeverage?.RetMsg);
+                        Console.WriteLine($"Error setting leverage for active trading pair {Symbol}: {responseSetLeverage?.RetMsg}");
+                        return false;
+                    }
+                }
+
+                // Calculate order price based on last price offset by 2 tick size
+                decimal orderPrice;
+                (string? priceString, int priceModifier) = ActiveTradingPair.Configuration.Side switch
+                {
+                    Side.Buy => (responseTickers.Result?.List?.FirstOrDefault()?.Bid1Price, -2),
+                    Side.Sell => (responseTickers.Result?.List?.FirstOrDefault()?.Ask1Price, 2),
+                    _ => throw new InvalidOperationException($"Unsupported trading side: {ActiveTradingPair.Configuration.Side}")
+                };
+
+                if (!TryParseDecimal(priceString, out decimal price) ||
+                    !TryParseDecimal(_instrumentsInfo[Symbol].PriceFilter?.TickSize, out decimal tickSize))
+                {
+                    _logger.LogError("Error parsing price or tick size for active trading pair {Symbol}", Symbol);
+                    Console.WriteLine($"Error parsing price or tick size for active trading pair {Symbol}");
+                    return false;
+                }
+                orderPrice = price + (priceModifier * tickSize);
 
                 // Place initial order
-                ApiResponse<OrderResult, object>? responsePlaceOrder = await PlaceOrder(Category.Linear, Symbol, ActiveTradingPair.Configuration.Side, OrderType.Market, initialQuantity);
+                ApiResponse<OrderResult, object>? responsePlaceOrder = await PlaceOrder(
+                    Category.Linear,
+                    Symbol,
+                    ActiveTradingPair.Configuration.Side!,
+                    OrderType.Limit,
+                    ActiveTradingPair.Configuration.InitialQuantity.ToString()!,
+                    orderPrice.ToString());
                 if (responsePlaceOrder?.RetCode != 0)
                 {
                     _logger.LogError("Error placing initial order for active trading pair {ActiveTradingPair}: {RetMsg}", Symbol, responsePlaceOrder?.RetMsg);
@@ -374,10 +436,10 @@ namespace BybitPerpetualsTradingBot
                 ActiveTradingPair.Position = responsePositionInfo?.Result?.List?.FirstOrDefault() ?? new();
 
                 // Check if position size is more than 0 to place reduce only order
-                if (TryParseDecimal(ActiveTradingPair.Position.Size, out decimal size) && size <= 0)
+                if (!TryParseDecimal(ActiveTradingPair.Position.Size, out decimal size) || size <= 0)
                     continue;
 
-                // Check if there are open orders
+                // Check if there is open reduce only order
                 ApiResponse<GetOpenAndClosedOrdersResult, object>? responseOpenOrders = await GetOpenAndClosedOrders(Category.Linear, Symbol, OpenOnly.True);
                 if (responseOpenOrders?.RetCode != 0)
                 {
@@ -387,10 +449,8 @@ namespace BybitPerpetualsTradingBot
                 }
                 if (responseOpenOrders.Result?.List?.Any(order => order.ReduceOnly.GetValueOrDefault()) == true)
                     continue;
-                else
-                    ActiveTradingPair.Orders = [];
 
-                if (TryParseDecimal(ActiveTradingPair.Position.AvgPrice, out decimal averagePrice) && averagePrice <= 0)
+                if (!TryParseDecimal(ActiveTradingPair.Position.AvgPrice, out decimal averagePrice) || averagePrice <= 0)
                 {
                     _logger.LogError("Error parsing average price for active trading pair {Symbol}", Symbol);
                     Console.WriteLine($"Error parsing average price for active trading pair {Symbol}");
@@ -398,24 +458,25 @@ namespace BybitPerpetualsTradingBot
                 }
 
                 string reduceOnlySide = ActiveTradingPair.Configuration.Side == Side.Buy ? Side.Sell : Side.Buy;
-                string takeProfitPrice = (averagePrice * (1 + (ActiveTradingPair.Configuration.TakeProfitPercentage!.Value / (100 * ActiveTradingPair.Configuration.Leverage!.Value)))).ToString();
-
+                decimal takeProfitFactor = ActiveTradingPair.Configuration.TakeProfitPercentage!.Value / (100 * ActiveTradingPair.Configuration.Leverage!.Value);
+                decimal takeProfitPrice;
+                if (ActiveTradingPair.Configuration.Side == Side.Buy)
+                    takeProfitPrice = averagePrice * (1 + takeProfitFactor);
+                else
+                    takeProfitPrice = averagePrice * (1 - takeProfitFactor);
 
                 // Place take profit order with reduce only
-                ApiResponse<OrderResult, object>? responsePlaceOrder = await PlaceOrder(Category.Linear, Symbol, reduceOnlySide, OrderType.Limit, "0", takeProfitPrice, TimeInForce.PostOnly, true);
+                ApiResponse<OrderResult, object>? responsePlaceOrder = await PlaceOrder(Category.Linear, Symbol, reduceOnlySide, OrderType.Limit, "0", takeProfitPrice.ToString(), TimeInForce.PostOnly, true);
                 if (responsePlaceOrder?.RetCode != 0)
                 {
                     _logger.LogError("Error placing reduce only order for active trading pair {ActiveTradingPair}: {RetMsg}", Symbol, responsePlaceOrder?.RetMsg);
                     Console.WriteLine($"Error placing reduce only order for active trading pair {Symbol}: {responsePlaceOrder?.RetMsg}");
                     return false;
                 }
-                ActiveTradingPair.Orders.Add(new GetOpenAndClosedOrdersList() { OrderId = responsePlaceOrder.Result?.OrderId });
             }
 
             return true;
         }
-
-        // Place Scaling Orders
 
         /// <summary>
         /// Gets instruments info for category and optional symbol and limit
@@ -438,6 +499,26 @@ namespace BybitPerpetualsTradingBot
             string signature = GenerateSignature(_settings, timestamp, query);
 
             return await _baseHttpClient.GetAsync<ApiResponse<GetInstrumentsInfoResult, object>?>(uri, _settings.APIKey, timestamp, signature, _settings.RecvWindow);
+        }
+
+        /// <summary>
+        /// Gets tickers for category and symbol
+        /// </summary>
+        private static async Task<ApiResponse<GetTickersResult, object>?> GetTickers(string category, string symbol)
+        {
+            Dictionary<string, string> queryParams = new()
+            {
+                {nameof(category), category},
+                {nameof(symbol), symbol.ToUpper()}
+            };
+
+            string query = string.Join("&", queryParams.Select(kvp => $"{kvp.Key}={kvp.Value}"));
+            string uri = BuildUri(_settings.Endpoint, EndpointProduct.Market, string.Concat(EndpointModule.Tickers, '?', query));
+
+            string timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
+            string signature = GenerateSignature(_settings, timestamp, query);
+
+            return await _baseHttpClient.GetAsync<ApiResponse<GetTickersResult, object>?>(uri, _settings.APIKey, timestamp, signature, _settings.RecvWindow);
         }
 
         /// <summary>

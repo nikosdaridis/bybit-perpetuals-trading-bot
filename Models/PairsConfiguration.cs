@@ -11,10 +11,9 @@
                 {
                     Side = "Buy",
                     Leverage = 20m,
-                    UpdateLeverageOpenPosition = false,
                     InitialQuantity = 0.001m,
-                    NumberOfScalingLevels = 5,
                     TakeProfitPercentage = 10m,
+                    NumberOfScalingLevels = 5,
                     InitialScalingUnrealizedPnL = 100m,
                     ScalingUnrealisedPnlMultiplier = 1.4m,
                     ScalingQuantityMultiplier = 1.2m
@@ -25,10 +24,9 @@
                 {
                     Side = "Buy",
                     Leverage = 20m,
-                    UpdateLeverageOpenPosition = false,
                     InitialQuantity = 0.01m,
-                    NumberOfScalingLevels = 5,
                     TakeProfitPercentage = 10m,
+                    NumberOfScalingLevels = 5,
                     InitialScalingUnrealizedPnL = 100m,
                     ScalingUnrealisedPnlMultiplier = 1.4m,
                     ScalingQuantityMultiplier = 1.2m
@@ -41,10 +39,9 @@
         {
             public string? Side { get; set; }
             public decimal? Leverage { get; set; }
-            public bool UpdateLeverageOpenPosition { get; set; }
             public decimal? InitialQuantity { get; set; }
-            public int? NumberOfScalingLevels { get; set; }
             public decimal? TakeProfitPercentage { get; set; }
+            public int? NumberOfScalingLevels { get; set; }
             public decimal? InitialScalingUnrealizedPnL { get; set; }
             public decimal? ScalingUnrealisedPnlMultiplier { get; set; }
             public decimal? ScalingQuantityMultiplier { get; set; }
