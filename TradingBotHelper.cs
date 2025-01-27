@@ -9,7 +9,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using static BybitPerpetualsTradingBot.Models.API.ApiParameters;
-using static BybitPerpetualsTradingBot.Models.API.GetTickersResult;
+using static BybitPerpetualsTradingBot.Models.API.GetOpenAndClosedOrdersResult;
 using static BybitPerpetualsTradingBot.Models.PairsConfiguration;
 
 namespace BybitPerpetualsTradingBot
@@ -233,6 +233,14 @@ namespace BybitPerpetualsTradingBot
                     return false;
                 }
 
+                // Check if max step unrealised PnL percentage is more than initial step unrealised PnL percentage
+                if (pairConfiguration.MaxScalingUnrealizedPnL is not null && pairConfiguration.MaxScalingUnrealizedPnL < pairConfiguration.InitialScalingUnrealizedPnL)
+                {
+                    _logger.LogError("Active trading pair {ActiveTradingPair} max step unrealised PnL percentage {MaxStepUnrealisedPnlPercentage} is invalid", pair, pairConfiguration.MaxScalingUnrealizedPnL);
+                    Console.WriteLine($"Active trading pair {pair} max step unrealised PnL percentage {pairConfiguration.MaxScalingUnrealizedPnL} is invalid");
+                    return false;
+                }
+
                 // Check if step unrealised PnL multiplier is more than 0
                 if (pairConfiguration.ScalingUnrealisedPnlMultiplier is not null && pairConfiguration.ScalingUnrealisedPnlMultiplier <= 0)
                 {
@@ -293,7 +301,6 @@ namespace BybitPerpetualsTradingBot
                     Console.WriteLine($"Error getting open orders for active trading pair {pair}: {responseOpenOrders?.RetMsg}");
                     return false;
                 }
-                _activeTradingPairs[pair].Orders = responseOpenOrders?.Result?.List ?? [];
             }
 
             return true;
@@ -320,15 +327,6 @@ namespace BybitPerpetualsTradingBot
                 if (!TryParseDecimal(ActiveTradingPair.Position.Size, out decimal size) || size != 0)
                     continue;
 
-                // Get open orders
-                ApiResponse<GetOpenAndClosedOrdersResult, object>? responseOpenOrders = await GetOpenAndClosedOrders(Category.Linear, Symbol, OpenOnly.True);
-                if (responseOpenOrders?.RetCode != 0)
-                {
-                    _logger.LogError("Error getting open orders for active trading pair {ActiveTradingPair}: {RetMsg}", Symbol, responseOpenOrders?.RetMsg);
-                    Console.WriteLine($"Error getting open orders for active trading pair {Symbol}: {responseOpenOrders?.RetMsg}");
-                    return false;
-                }
-
                 // Get tickers
                 ApiResponse<GetTickersResult, object>? responseTickers = await GetTickers(Category.Linear, Symbol);
                 if (responseTickers?.RetCode != 0)
@@ -338,8 +336,21 @@ namespace BybitPerpetualsTradingBot
                     return false;
                 }
 
+                // Get open orders
+                ApiResponse<GetOpenAndClosedOrdersResult, object>? responseOpenOrders = await GetOpenAndClosedOrders(Category.Linear, Symbol, OpenOnly.True);
+                if (responseOpenOrders?.RetCode != 0)
+                {
+                    _logger.LogError("Error getting open orders for active trading pair {ActiveTradingPair}: {RetMsg}", Symbol, responseOpenOrders?.RetMsg);
+                    Console.WriteLine($"Error getting open orders for active trading pair {Symbol}: {responseOpenOrders?.RetMsg}");
+                    return false;
+                }
+
+                // Check if there is open order with status PartiallyFilled to wait for it to be filled
+                if (responseOpenOrders.Result?.List?.Any(order => order.OrderStatus == OrderStatus.PartiallyFilled) == true)
+                    continue;
+
                 // Check if there is open order with price close to last price within 6 tick size to wait for it to be filled
-                if (responseOpenOrders.Result?.List?.Any(order =>
+                if (size == 0 && responseOpenOrders.Result?.List?.Any(order =>
                 {
                     if (TryParseDecimal(order.Price, out decimal orderPrice) &&
                         TryParseDecimal(responseTickers.Result?.List?.FirstOrDefault()?.LastPrice, out decimal lastPrice) &&
@@ -360,7 +371,6 @@ namespace BybitPerpetualsTradingBot
                     Console.WriteLine($"Error cancelling all orders for active trading pair {Symbol}: {responseCancelAll?.RetMsg}");
                     return false;
                 }
-                ActiveTradingPair.Orders = [];
 
                 if (!TryParseDecimal(ActiveTradingPair.Position.Leverage, out decimal leverage))
                 {
@@ -381,7 +391,7 @@ namespace BybitPerpetualsTradingBot
                     }
                 }
 
-                // Calculate order price based on last price offset by 2 tick size
+                // Calculate order price based on bid or ask price offset by 2 tick size
                 decimal orderPrice;
                 (string? priceString, int priceModifier) = ActiveTradingPair.Configuration.Side switch
                 {
@@ -399,6 +409,20 @@ namespace BybitPerpetualsTradingBot
                 }
                 orderPrice = price + (priceModifier * tickSize);
 
+                // Get open position again before placing order
+                responsePositionInfo = await GetPositionInfo(Category.Linear, Symbol);
+                if (responsePositionInfo?.RetCode != 0)
+                {
+                    _logger.LogError("Error getting position info for active trading pair {ActiveTradingPair}: {RetMsg}", Symbol, responsePositionInfo?.RetMsg);
+                    Console.WriteLine($"Error getting position info for active trading pair {Symbol}: {responsePositionInfo?.RetMsg}");
+                    return false;
+                }
+                ActiveTradingPair.Position = responsePositionInfo?.Result?.List?.FirstOrDefault() ?? new();
+
+                // Check if position size is more than 0 to prevent placing duplicate initial order
+                if (!TryParseDecimal(ActiveTradingPair.Position.Size, out decimal updateSize) || updateSize > 0)
+                    continue;
+
                 // Place initial order
                 ApiResponse<OrderResult, object>? responsePlaceOrder = await PlaceOrder(
                     Category.Linear,
@@ -413,6 +437,9 @@ namespace BybitPerpetualsTradingBot
                     Console.WriteLine($"Error placing initial order for active trading pair {Symbol}: {responsePlaceOrder?.RetMsg}");
                     return false;
                 }
+
+                ActiveTradingPair.ScalingLevels = [];
+                ActiveTradingPair.ScalingLevelsToBePlaced = [];
             }
 
             return true;
@@ -447,8 +474,13 @@ namespace BybitPerpetualsTradingBot
                     Console.WriteLine($"Error getting open orders for active trading pair {Symbol}: {responseOpenOrders?.RetMsg}");
                     return false;
                 }
-                if (responseOpenOrders.Result?.List?.Any(order => order.ReduceOnly.GetValueOrDefault()) == true)
-                    continue;
+
+                if (!TryParseDecimal(_instrumentsInfo[Symbol].PriceFilter?.TickSize, out decimal priceTickSize) || priceTickSize <= 0)
+                {
+                    _logger.LogError("Invalid quantity step or price tick size for pair {Symbol}", Symbol);
+                    Console.WriteLine($"Invalid quantity step or price tick size for pair {Symbol}");
+                    return false;
+                }
 
                 if (!TryParseDecimal(ActiveTradingPair.Position.AvgPrice, out decimal averagePrice) || averagePrice <= 0)
                 {
@@ -457,7 +489,7 @@ namespace BybitPerpetualsTradingBot
                     return false;
                 }
 
-                string reduceOnlySide = ActiveTradingPair.Configuration.Side == Side.Buy ? Side.Sell : Side.Buy;
+                string takeProfitSide = ActiveTradingPair.Configuration.Side == Side.Buy ? Side.Sell : Side.Buy;
                 decimal takeProfitFactor = ActiveTradingPair.Configuration.TakeProfitPercentage!.Value / (100 * ActiveTradingPair.Configuration.Leverage!.Value);
                 decimal takeProfitPrice;
                 if (ActiveTradingPair.Configuration.Side == Side.Buy)
@@ -465,8 +497,82 @@ namespace BybitPerpetualsTradingBot
                 else
                     takeProfitPrice = averagePrice * (1 - takeProfitFactor);
 
-                // Place take profit order with reduce only
-                ApiResponse<OrderResult, object>? responsePlaceOrder = await PlaceOrder(Category.Linear, Symbol, reduceOnlySide, OrderType.Limit, "0", takeProfitPrice.ToString(), TimeInForce.PostOnly, true);
+                takeProfitPrice = Math.Round(takeProfitPrice / priceTickSize) * priceTickSize;
+                takeProfitPrice = takeProfitPrice.Normalize();
+
+                GetOpenAndClosedOrdersDetails? takeProfitOrder = responseOpenOrders.Result?.List?.FirstOrDefault(order => order.ReduceOnly.GetValueOrDefault());
+
+                // Check if take profit price is different from take profit order price to amend order with new price and quantity
+                if (takeProfitOrder is not null)
+                {
+                    if (takeProfitOrder?.Price == takeProfitPrice.ToString())
+                        continue;
+                    else
+                    {
+                        ApiResponse<OrderResult, object>? responseAmendOrder = await AmendOrder(Category.Linear, Symbol, takeProfitOrder?.OrderId ?? string.Empty, ActiveTradingPair.Position.Size!, takeProfitPrice.ToString());
+                        if (responseAmendOrder?.RetCode != 0)
+                        {
+                            _logger.LogError("Error amending take profit order for active trading pair {ActiveTradingPair}: {RetMsg}", Symbol, responseAmendOrder?.RetMsg);
+                            Console.WriteLine($"Error amending take profit order for active trading pair {Symbol}: {responseAmendOrder?.RetMsg}");
+                            return false;
+                        }
+                    }
+                }
+
+                // Get tickers
+                ApiResponse<GetTickersResult, object>? responseTickers = await GetTickers(Category.Linear, Symbol);
+                if (responseTickers?.RetCode != 0)
+                {
+                    _logger.LogError("Error getting tickers for active trading pair {ActiveTradingPair}: {RetMsg}", Symbol, responseTickers?.RetMsg);
+                    Console.WriteLine($"Error getting tickers for active trading pair {Symbol}: {responseTickers?.RetMsg}");
+                    return false;
+                }
+
+                if (!TryParseDecimal(responseTickers.Result?.List?.FirstOrDefault()?.LastPrice, out decimal lastPrice) || averagePrice <= 0)
+                {
+                    _logger.LogError("Error parsing last price for active trading pair {Symbol}", Symbol);
+                    Console.WriteLine($"Error parsing last price for active trading pair {Symbol}");
+                    return false;
+                }
+
+                // Check if last price with 0.5% offset is more than take profit price to place reduce only market order (fallback)
+                bool lastPriceMoreThanTakeProfitPrice =
+                    ActiveTradingPair.Configuration.Side == Side.Buy
+                        ? (lastPrice * 1.005m) > takeProfitPrice
+                        : (lastPrice * 0.995m) < takeProfitPrice;
+
+                if (lastPriceMoreThanTakeProfitPrice)
+                {
+                    ApiResponse<OrderResult, object>? responsePlaceOrderMarket = await PlaceOrder(
+                        Category.Linear,
+                        Symbol,
+                        takeProfitSide,
+                        OrderType.Market,
+                        ActiveTradingPair.Position.Size!,
+                        timeInForce: TimeInForce.ImmediateOrCancel,
+                        reduceOnly: true);
+
+                    if (responsePlaceOrderMarket?.RetCode != 0)
+                    {
+                        _logger.LogError("Error placing reduce only market order for active trading pair {ActiveTradingPair}: {RetMsg}", Symbol, responsePlaceOrderMarket?.RetMsg);
+                        Console.WriteLine($"Error placing reduce only market order for active trading pair {Symbol}: {responsePlaceOrderMarket?.RetMsg}");
+                        return false;
+                    }
+
+                    return true;
+                }
+
+                // Place take profit order
+                ApiResponse<OrderResult, object>? responsePlaceOrder = await PlaceOrder(
+                    Category.Linear,
+                    Symbol,
+                    takeProfitSide,
+                    OrderType.Limit,
+                    ActiveTradingPair.Position.Size!,
+                    takeProfitPrice.ToString(),
+                    TimeInForce.PostOnly,
+                    true);
+
                 if (responsePlaceOrder?.RetCode != 0)
                 {
                     _logger.LogError("Error placing reduce only order for active trading pair {ActiveTradingPair}: {RetMsg}", Symbol, responsePlaceOrder?.RetMsg);
@@ -475,6 +581,189 @@ namespace BybitPerpetualsTradingBot
                 }
             }
 
+            return true;
+        }
+
+        /// <summary>
+        /// Places scaling orders for active trading pairs in batches of 10 maximum
+        /// </summary>
+        internal static async Task<bool> PlaceScalingOrders()
+        {
+            foreach ((string Symbol, ActiveTradingPair ActiveTradingPair) in _activeTradingPairs)
+            {
+                if (!TryParseDecimal(ActiveTradingPair.Position.Size, out decimal size) || size <= 0)
+                    continue;
+
+                if (ActiveTradingPair.ScalingLevels.Count > 0 && ActiveTradingPair.ScalingLevelsToBePlaced.Count <= 0)
+                    continue;
+
+                if (ActiveTradingPair.ScalingLevelsToBePlaced.Count <= 0)
+                {
+                    // Get open orders
+                    ApiResponse<GetOpenAndClosedOrdersResult, object>? responseOpenOrders = await GetOpenAndClosedOrders(Category.Linear, Symbol, OpenOnly.True);
+                    if (responseOpenOrders?.RetCode != 0)
+                    {
+                        _logger.LogError("Error getting open orders for active trading pair {ActiveTradingPair}: {RetMsg}", Symbol, responseOpenOrders?.RetMsg);
+                        Console.WriteLine($"Error getting open orders for active trading pair {Symbol}: {responseOpenOrders?.RetMsg}");
+                        return false;
+                    }
+
+                    // Check if there is any open order with same side
+                    if (responseOpenOrders.Result?.List?.Any(order =>
+                        order.Side == ActiveTradingPair.Configuration.Side) == true)
+                        continue;
+
+                    // Get positon info
+                    ApiResponse<GetPositionInfoResult, object>? responsePositionInfo = await GetPositionInfo(Category.Linear, Symbol);
+                    if (responsePositionInfo?.RetCode != 0)
+                    {
+                        _logger.LogError("Error getting position info for active trading pair {ActiveTradingPair}: {RetMsg}", Symbol, responsePositionInfo?.RetMsg);
+                        Console.WriteLine($"Error getting position info for active trading pair {Symbol}: {responsePositionInfo?.RetMsg}");
+                        return false;
+                    }
+
+                    // Check if position size is more than initial quantity
+                    if (!TryParseDecimal(responsePositionInfo.Result?.List?.FirstOrDefault()?.Size, out decimal updatedSize) || updatedSize > ActiveTradingPair.Configuration.InitialQuantity)
+                        continue;
+                }
+
+                if (ActiveTradingPair.ScalingLevels.Count <= 0)
+                {
+                    if (!await CalculateScalingLevels(Symbol, ActiveTradingPair))
+                    {
+                        _logger.LogError("Error calculating scaling levels for active trading pair {ActiveTradingPair}", Symbol);
+                        Console.WriteLine($"Error calculating scaling levels for active trading pair {Symbol}");
+                        return false;
+                    }
+                }
+
+                // Batch place orders in groups of 10
+                while (ActiveTradingPair.ScalingLevelsToBePlaced.Count > 0)
+                {
+                    List<ScalingLevel> scalingLevelsBatch = ActiveTradingPair.ScalingLevelsToBePlaced.Take(10).ToList();
+
+                    // Place batch order
+                    ApiResponse<BatchOrderResult, BatchOrderRetExtInfo>? responseBatchOrder = await BatchPlaceOrder(
+                        new()
+                        {
+                            Category = Category.Linear,
+                            Request = scalingLevelsBatch.Select(scalingLevel =>
+                            new BatchOrderRequest()
+                            {
+                                Symbol = Symbol,
+                                Side = ActiveTradingPair.Configuration.Side,
+                                OrderType = OrderType.Limit,
+                                Qty = scalingLevel.Quantity.ToString(),
+                                Price = scalingLevel.Price.ToString(),
+                                TimeInForce = TimeInForce.PostOnly
+                            }).ToList()
+                        });
+
+                    if (responseBatchOrder?.RetCode != 0)
+                    {
+                        _logger.LogError("Error placing scaling orders for active trading pair {ActiveTradingPair}: {RetMsg}", Symbol, responseBatchOrder?.RetMsg);
+                        Console.WriteLine($"Error placing scaling orders for active trading pair {Symbol}: {responseBatchOrder?.RetMsg}");
+                        return false;
+                    }
+
+                    // Get open orders
+                    ApiResponse<GetOpenAndClosedOrdersResult, object>? responseOpenOrders = await GetOpenAndClosedOrders(Category.Linear, Symbol, OpenOnly.True);
+                    if (responseOpenOrders?.RetCode != 0)
+                    {
+                        _logger.LogError("Error getting open orders for active trading pair {ActiveTradingPair}: {RetMsg}", Symbol, responseOpenOrders?.RetMsg);
+                        Console.WriteLine($"Error getting open orders for active trading pair {Symbol}: {responseOpenOrders?.RetMsg}");
+                        return false;
+                    }
+
+                    // Remove successfully placed orders from scaling levels to be placed
+                    ActiveTradingPair.ScalingLevelsToBePlaced.Where(scalingLevel => responseOpenOrders.Result?.List?.Any(order =>
+                        order.Side == ActiveTradingPair.Configuration.Side &&
+                        TryParseDecimal(order.Price, out decimal orderPrice) &&
+                        TryParseDecimal(order.Quantity, out decimal orderQuantity) &&
+                        scalingLevel.Price == orderPrice &&
+                        scalingLevel.Quantity == orderQuantity) == true).ToList().ForEach(scalingLevel => ActiveTradingPair.ScalingLevelsToBePlaced.Remove(scalingLevel));
+
+                    // Check if any order placement failed
+                    for (int i = 0; i < responseBatchOrder.RetExtInfo?.List?.Count; i++)
+                    {
+                        ScalingLevel scalingLevel = scalingLevelsBatch[i];
+                        if (responseBatchOrder.RetExtInfo.List[i].Code != 0)
+                        {
+                            _logger.LogError("Error placing scaling order for active trading pair {ActiveTradingPair} at price {Price} and quantity {Quantity}: {RetMsg}",
+                                Symbol, scalingLevel.Price, scalingLevel.Quantity, responseBatchOrder.RetExtInfo.List[i].Msg);
+                            Console.WriteLine($"Error placing scaling order for active trading pair {Symbol} at price {scalingLevel.Price} and quantity {scalingLevel.Quantity}: {responseBatchOrder.RetExtInfo.List[i].Msg}");
+                            return false;
+                        }
+                    }
+                }
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Calculates scaling levels based on configuration
+        /// </summary>
+        private static async Task<bool> CalculateScalingLevels(string symbol, ActiveTradingPair activeTradingPair)
+        {
+            List<ScalingLevel> scalingLevels = [];
+
+            // Get position info
+            ApiResponse<GetPositionInfoResult, object>? responsePositionInfo = await GetPositionInfo(Category.Linear, symbol);
+            if (responsePositionInfo?.RetCode != 0)
+            {
+                _logger.LogError("Error getting position info for active trading pair {ActiveTradingPair}: {RetMsg}", symbol, responsePositionInfo?.RetMsg);
+                Console.WriteLine($"Error getting position info for active trading pair {symbol}: {responsePositionInfo?.RetMsg}");
+                return false;
+            }
+            activeTradingPair.Position = responsePositionInfo?.Result?.List?.FirstOrDefault() ?? new();
+
+            if (!TryParseDecimal(activeTradingPair.Position.Size, out decimal currentQty) || currentQty <= 0 ||
+                !TryParseDecimal(activeTradingPair.Position.AvgPrice, out decimal currentAvgPrice) || currentAvgPrice <= 0)
+            {
+                _logger.LogError("Invalid current quantity or average price for pair {Symbol}", symbol);
+                Console.WriteLine($"Invalid current quantity or average price for pair {symbol}");
+                return false;
+            }
+
+            if (!TryParseDecimal(_instrumentsInfo[symbol].LotSizeFilter?.QtyStep, out decimal qtyStep) || qtyStep <= 0 ||
+            !TryParseDecimal(_instrumentsInfo[symbol].PriceFilter?.TickSize, out decimal priceTickSize) || priceTickSize <= 0)
+            {
+                _logger.LogError("Invalid quantity step or price tick size for pair {Symbol}", symbol);
+                Console.WriteLine($"Invalid quantity step or price tick size for pair {symbol}");
+                return false;
+            }
+
+            decimal pnlFactor = 1m;
+            decimal levelQty = currentQty / 2;
+
+            for (int i = 0; i < activeTradingPair.Configuration.NumberOfScalingLevels; i++)
+            {
+                decimal pnlPercentage = Math.Min(
+                    activeTradingPair.Configuration.InitialScalingUnrealizedPnL.GetValueOrDefault() * pnlFactor,
+                    activeTradingPair.Configuration.MaxScalingUnrealizedPnL.GetValueOrDefault());
+
+                decimal takeProfitFactor = pnlPercentage / (100m * activeTradingPair.Configuration.Leverage.GetValueOrDefault());
+
+                decimal levelPrice = activeTradingPair.Position.Side == Side.Buy
+                    ? currentAvgPrice * (1m - takeProfitFactor)
+                    : currentAvgPrice * (1m + takeProfitFactor);
+
+                levelQty *= activeTradingPair.Configuration.ScalingQuantityMultiplier.GetValueOrDefault();
+                decimal roundedPrice = Math.Round(levelPrice / priceTickSize) * priceTickSize;
+                decimal roundedQty = Math.Round(levelQty / qtyStep) * qtyStep;
+
+                scalingLevels.Add(new() { Price = roundedPrice, Quantity = roundedQty });
+
+                decimal totalQty = currentQty + roundedQty;
+                currentAvgPrice = (currentAvgPrice * currentQty + roundedPrice * roundedQty) / totalQty;
+                currentQty = totalQty;
+
+                pnlFactor *= activeTradingPair.Configuration.ScalingUnrealisedPnlMultiplier.GetValueOrDefault();
+            }
+
+            activeTradingPair.ScalingLevels = scalingLevels.ToList();
+            activeTradingPair.ScalingLevelsToBePlaced = scalingLevels;
             return true;
         }
 
@@ -622,9 +911,9 @@ namespace BybitPerpetualsTradingBot
         }
 
         /// <summary>
-        /// Amends order for category, symbol, orderId and price
+        /// Amends order for category, symbol, orderId, qty and price
         /// </summary>
-        private static async Task<ApiResponse<OrderResult, object>?> AmendOrder(string category, string symbol, string orderId, string price)
+        private static async Task<ApiResponse<OrderResult, object>?> AmendOrder(string category, string symbol, string orderId, string qty, string price)
         {
             string uri = BuildUri(_settings.Endpoint, EndpointProduct.Order, EndpointModule.Amend);
 
@@ -633,6 +922,7 @@ namespace BybitPerpetualsTradingBot
                     {nameof(category), category},
                     {nameof(symbol), symbol.ToUpper()},
                     {nameof(orderId), orderId},
+                    {nameof(qty), qty},
                     {nameof(price), price}
                 };
 
@@ -690,9 +980,22 @@ namespace BybitPerpetualsTradingBot
         }
 
         /// <summary>
-        /// Converts string to decimal with decimal point and invariant culture
+        /// Converts string to decimal with decimal point, invariant culture and normalizes value
         /// </summary>
-        private static bool TryParseDecimal(string? input, out decimal result) =>
-            decimal.TryParse(input, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out result);
+        private static bool TryParseDecimal(string? input, out decimal result)
+        {
+            bool success = decimal.TryParse(input, NumberStyles.Number, CultureInfo.InvariantCulture, out result);
+
+            if (success)
+                result = result.Normalize();
+
+            return success;
+        }
+
+        /// <summary>
+        /// Normalizes decimal
+        /// </summary>
+        private static decimal Normalize(this decimal value) =>
+            value / 1.000000000000000000000000000000000m;
     }
 }

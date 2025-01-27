@@ -13,9 +13,10 @@
                     Leverage = 20m,
                     InitialQuantity = 0.001m,
                     TakeProfitPercentage = 10m,
-                    NumberOfScalingLevels = 5,
+                    NumberOfScalingLevels = 15,
                     InitialScalingUnrealizedPnL = 100m,
-                    ScalingUnrealisedPnlMultiplier = 1.4m,
+                    MaxScalingUnrealizedPnL = 1500m,
+                    ScalingUnrealisedPnlMultiplier = 1.3m,
                     ScalingQuantityMultiplier = 1.2m
                 }
             },
@@ -26,14 +27,14 @@
                     Leverage = 20m,
                     InitialQuantity = 0.01m,
                     TakeProfitPercentage = 10m,
-                    NumberOfScalingLevels = 5,
+                    NumberOfScalingLevels = 15,
                     InitialScalingUnrealizedPnL = 100m,
-                    ScalingUnrealisedPnlMultiplier = 1.4m,
+                    MaxScalingUnrealizedPnL = 1500m,
+                    ScalingUnrealisedPnlMultiplier = 1.3m,
                     ScalingQuantityMultiplier = 1.2m
                 }
             }
         };
-
 
         internal sealed class PairConfiguration
         {
@@ -43,6 +44,7 @@
             public decimal? TakeProfitPercentage { get; set; }
             public int? NumberOfScalingLevels { get; set; }
             public decimal? InitialScalingUnrealizedPnL { get; set; }
+            public decimal? MaxScalingUnrealizedPnL { get; set; }
             public decimal? ScalingUnrealisedPnlMultiplier { get; set; }
             public decimal? ScalingQuantityMultiplier { get; set; }
         }

@@ -1,5 +1,4 @@
-﻿using static BybitPerpetualsTradingBot.Models.API.GetOpenAndClosedOrdersResult;
-using static BybitPerpetualsTradingBot.Models.API.GetPositionInfoResult;
+﻿using static BybitPerpetualsTradingBot.Models.API.GetPositionInfoResult;
 using static BybitPerpetualsTradingBot.Models.PairsConfiguration;
 
 namespace BybitPerpetualsTradingBot.Models
@@ -8,6 +7,7 @@ namespace BybitPerpetualsTradingBot.Models
     {
         public PairConfiguration Configuration { get; set; } = new();
         public GetPositionInfoList Position { get; set; } = new();
-        public List<GetOpenAndClosedOrdersList> Orders { get; set; } = [];
+        public List<ScalingLevel> ScalingLevels { get; set; } = [];
+        public List<ScalingLevel> ScalingLevelsToBePlaced { get; set; } = [];
     }
 }

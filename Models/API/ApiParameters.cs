@@ -42,6 +42,19 @@
             public const string Limit = "Limit";
         }
 
+        internal sealed class OrderStatus
+        {
+            public const string New = "New";
+            public const string PartiallyFilled = "PartiallyFilled";
+            public const string Untriggered = "Untriggered";
+            public const string Rejected = "Rejected";
+            public const string PartiallyFilledCanceled = "PartiallyFilledCanceled";
+            public const string Filled = "Filled";
+            public const string Cancelled = "Cancelled";
+            public const string Triggered = "Triggered";
+            public const string Deactivated = "Deactivated";
+        }
+
         internal sealed class TimeInForce
         {
             public const string GoodTillCancel = "GTC";

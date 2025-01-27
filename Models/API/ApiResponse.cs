@@ -404,9 +404,9 @@ namespace BybitPerpetualsTradingBot.Models.API
         public string? NextPageCursor { get; set; }
 
         [JsonProperty("list")]
-        public List<GetOpenAndClosedOrdersList>? List { get; set; }
+        public List<GetOpenAndClosedOrdersDetails>? List { get; set; }
 
-        internal sealed class GetOpenAndClosedOrdersList
+        internal sealed class GetOpenAndClosedOrdersDetails
         {
             [JsonProperty("orderId")]
             public string? OrderId { get; set; }

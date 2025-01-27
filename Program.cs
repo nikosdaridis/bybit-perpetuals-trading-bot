@@ -36,9 +36,7 @@ namespace BybitPerpetualsTradingBot
 
                     await TradingBotHelper.PlaceInitialPositions();
                     await TradingBotHelper.PlaceTakeProfitOrders();
-                    //await TradingBotHelper.PlaceScalingOrders();
-
-                    await Task.Delay(1000);
+                    await TradingBotHelper.PlaceScalingOrders();
                 }
                 catch (Exception ex)
                 {
