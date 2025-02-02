@@ -84,7 +84,7 @@ namespace BybitPerpetualsTradingBot
         }
 
         /// <summary>
-        /// Initializes active trading pairs and validates pairs configuration data with instruments info and adds position info, open orders and sets leverage
+        /// Initializes active trading pairs and validates pairs configuration data with instruments info and adds position info, open orders
         /// </summary>
         internal static async Task<bool> InitializeActiveTradingPairs()
         {
@@ -292,15 +292,6 @@ namespace BybitPerpetualsTradingBot
                     Console.WriteLine($"Active trading pair {pair} initial quantity {pairConfiguration.InitialQuantity} * latest price {lastPrice} results in notional value {notionalValue}, which is less than the min notional value {minNotionalValue}");
                     return false;
                 }
-
-                // Get open orders for active trading pair
-                ApiResponse<GetOpenAndClosedOrdersResult, object>? responseOpenOrders = await GetOpenAndClosedOrders(Category.Linear, pair, OpenOnly.True);
-                if (responseOpenOrders?.RetCode != 0)
-                {
-                    _logger.LogError("Error getting open orders for active trading pair {ActiveTradingPair}: {RetMsg}", pair, responseOpenOrders?.RetMsg);
-                    Console.WriteLine($"Error getting open orders for active trading pair {pair}: {responseOpenOrders?.RetMsg}");
-                    return false;
-                }
             }
 
             return true;
@@ -350,7 +341,7 @@ namespace BybitPerpetualsTradingBot
                     continue;
 
                 // Check if there is open order with price close to last price within 6 tick size to wait for it to be filled
-                if (size == 0 && responseOpenOrders.Result?.List?.Any(order =>
+                if (responseOpenOrders.Result?.List?.Any(order =>
                 {
                     if (TryParseDecimal(order.Price, out decimal orderPrice) &&
                         TryParseDecimal(responseTickers.Result?.List?.FirstOrDefault()?.LastPrice, out decimal lastPrice) &&
@@ -420,7 +411,7 @@ namespace BybitPerpetualsTradingBot
                 ActiveTradingPair.Position = responsePositionInfo?.Result?.List?.FirstOrDefault() ?? new();
 
                 // Check if position size is more than 0 to prevent placing duplicate initial order
-                if (!TryParseDecimal(ActiveTradingPair.Position.Size, out decimal updateSize) || updateSize > 0)
+                if (!TryParseDecimal(ActiveTradingPair.Position.Size, out decimal updatedSize) || updatedSize > 0)
                     continue;
 
                 // Place initial order
@@ -430,7 +421,8 @@ namespace BybitPerpetualsTradingBot
                     ActiveTradingPair.Configuration.Side!,
                     OrderType.Limit,
                     ActiveTradingPair.Configuration.InitialQuantity.ToString()!,
-                    orderPrice.ToString());
+                    orderPrice.ToString(),
+                    TimeInForce.PostOnly);
                 if (responsePlaceOrder?.RetCode != 0)
                 {
                     _logger.LogError("Error placing initial order for active trading pair {ActiveTradingPair}: {RetMsg}", Symbol, responsePlaceOrder?.RetMsg);
@@ -446,7 +438,7 @@ namespace BybitPerpetualsTradingBot
         }
 
         /// <summary>
-        /// Places take profit orders for active trading pairs if position size is more than 0 and no open orders
+        /// Places take profit orders for active trading pairs if position size is more than 0 and no open orders or amend orders with new price and quantity
         /// </summary>
         internal static async Task<bool> PlaceTakeProfitOrders()
         {
@@ -516,6 +508,8 @@ namespace BybitPerpetualsTradingBot
                             Console.WriteLine($"Error amending take profit order for active trading pair {Symbol}: {responseAmendOrder?.RetMsg}");
                             return false;
                         }
+
+                        return true;
                     }
                 }
 
