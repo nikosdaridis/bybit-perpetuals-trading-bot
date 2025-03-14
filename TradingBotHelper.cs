@@ -382,18 +382,27 @@ namespace BybitPerpetualsTradingBot
                 // Calculate and check if price and quantity is more than min notional value
                 if (TryParseDecimal(_instrumentsInfo[Symbol].LotSizeFilter?.MinNotionalValue, out decimal minNotionalValue) &&
                     TryParseDecimal(_instrumentsInfo[Symbol].LotSizeFilter?.QtyStep, out decimal qtyStep) &&
+                    TryParseDecimal(_instrumentsInfo[Symbol].LotSizeFilter?.MinOrderQty, out decimal minOrderQty) &&
                     TryParseDecimal(responseTickers.Result?.List?.FirstOrDefault()?.LastPrice, out decimal lastPrice))
                 {
                     decimal rawQuantity = (ActiveTradingPair.Configuration.InitialMargin.GetValueOrDefault() * ActiveTradingPair.Configuration.Leverage.GetValueOrDefault()) / lastPrice;
                     adjustedQuantity = Math.Floor(rawQuantity / qtyStep) * qtyStep;
 
+                    if (adjustedQuantity < minOrderQty)
+                    {
+                        _logger.LogError("Active trading pair {ActiveTradingPair}: adjusted quantity {AdjustedQuantity} is below MinOrderQty {MinOrderQty}. Raw quantity: {RawQuantity}",
+                            ActiveTradingPair, adjustedQuantity, minOrderQty, rawQuantity);
+                        Console.WriteLine($"Active trading pair {Symbol}: adjusted quantity {adjustedQuantity} is below MinOrderQty {minOrderQty}. Raw quantity: {rawQuantity}");
+                        continue;
+                    }
+
                     decimal notionalValue = adjustedQuantity * lastPrice;
 
                     if (notionalValue < minNotionalValue)
                     {
-                        _logger.LogError("Active trading pair {ActiveTradingPair}: calculated quantity {Quantity} * latest price {LastPrice} results in notional value {NotionalValue}, which is less than the min notional value {MinNotionalValue}",
-                            Symbol, adjustedQuantity, lastPrice, notionalValue, minNotionalValue);
-                        Console.WriteLine($"Active trading pair {Symbol}: calculated quantity {adjustedQuantity} * latest price {lastPrice} results in notional value {notionalValue}, which is less than the min notional value {minNotionalValue}");
+                        _logger.LogError("Active trading pair {ActiveTradingPair}: calculated quantity {Quantity} * leverage {Leverage} * latest price {LastPrice} results in notional value {NotionalValue}, which is less than the min notional value {MinNotionalValue}",
+                            Symbol, adjustedQuantity, ActiveTradingPair.Configuration.Leverage, lastPrice, notionalValue, minNotionalValue);
+                        Console.WriteLine($"Active trading pair {Symbol}: calculated quantity {adjustedQuantity} * leverage {ActiveTradingPair.Configuration.Leverage} * latest price {lastPrice} results in notional value {notionalValue}, which is less than the min notional value {minNotionalValue}");
                         continue;
                     }
                 }
@@ -414,6 +423,7 @@ namespace BybitPerpetualsTradingBot
                     return false;
                 }
 
+                ActiveTradingPair.CalculatedInitialQuantity = adjustedQuantity;
                 ActiveTradingPair.ScalingLevels = [];
                 ActiveTradingPair.ScalingLevelsToBePlaced = [];
             }
@@ -600,12 +610,9 @@ namespace BybitPerpetualsTradingBot
                         return false;
                     }
 
-                    // Check if positionIM is valid and not more than 50% above InitialMargin
-                    if (!TryParseDecimal(responsePositionInfo.Result?.List?.FirstOrDefault()?.PositionIM, out decimal positionIM)
-                        || ActiveTradingPair.Configuration.InitialMargin is not decimal initialMargin
-                        || positionIM > initialMargin * 1.5m)
+                    // Check if position size is more than calculated initial quantity
+                    if (!TryParseDecimal(responsePositionInfo.Result?.List?.FirstOrDefault()?.Size, out decimal positionSize) || positionSize > ActiveTradingPair.CalculatedInitialQuantity)
                         continue;
-
                 }
 
                 if (ActiveTradingPair.ScalingLevels.Count <= 0)

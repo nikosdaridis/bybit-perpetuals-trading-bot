@@ -7,6 +7,7 @@ namespace BybitPerpetualsTradingBot.Models
     {
         public PairConfiguration Configuration { get; set; } = new();
         public GetPositionInfoList Position { get; set; } = new();
+        public decimal CalculatedInitialQuantity { get; set; }  
         public List<ScalingLevel> ScalingLevels { get; set; } = [];
         public List<ScalingLevel> ScalingLevelsToBePlaced { get; set; } = [];
     }
