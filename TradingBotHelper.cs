@@ -9,6 +9,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using static BybitPerpetualsTradingBot.Models.API.ApiParameters;
+using static BybitPerpetualsTradingBot.Models.API.GetInstrumentsInfoResult;
 using static BybitPerpetualsTradingBot.Models.API.GetOpenAndClosedOrdersResult;
 using static BybitPerpetualsTradingBot.Models.PairsConfiguration;
 
@@ -27,7 +28,7 @@ namespace BybitPerpetualsTradingBot
         private static ILogger<TradingBot> _logger;
         private static Settings _settings;
         private static PairsConfiguration _pairsConfiguration;
-        private static Dictionary<string, GetInstrumentsInfoResult.InstrumentList> _instrumentsInfo = [];
+        private static Dictionary<string, InstrumentList> _instrumentsInfo = [];
         private static Dictionary<string, ActiveTradingPair> _activeTradingPairs = [];
 
         private readonly static JsonSerializerSettings _jsonSerializerSettings = new()
@@ -107,7 +108,7 @@ namespace BybitPerpetualsTradingBot
 
             foreach (string pair in _pairsConfiguration.ActiveTradingPairs)
             {
-                if (!_instrumentsInfo.TryGetValue(pair, out GetInstrumentsInfoResult.InstrumentList? instrumentList))
+                if (!_instrumentsInfo.TryGetValue(pair, out InstrumentList? instrumentList))
                 {
                     _logger.LogError("Active trading pair {ActiveTradingPair} not found in instruments info", pair);
                     Console.WriteLine($"Active trading pair {pair} not found in instruments info");
@@ -172,39 +173,6 @@ namespace BybitPerpetualsTradingBot
                         _logger.LogError("Active trading pair {ActiveTradingPair} leverage {Leverage} is not correct for leverage step size {LeverageStep}",
                             pair, pairConfiguration.Leverage, leverageStep);
                         Console.WriteLine($"Active trading pair {pair} leverage {pairConfiguration.Leverage} is not correct for leverage step size {leverageStep}");
-                        return false;
-                    }
-                }
-
-                // Check if initial quantity is within expected range
-                if (pairConfiguration.InitialQuantity is not null &&
-                    TryParseDecimal(instrumentList.LotSizeFilter?.MinOrderQty, out decimal minQty) &&
-                    TryParseDecimal(instrumentList.LotSizeFilter?.MaxOrderQty, out decimal maxQty))
-                {
-                    if (pairConfiguration.InitialQuantity < minQty || pairConfiguration.InitialQuantity > maxQty)
-                    {
-                        _logger.LogError("Active trading pair {ActiveTradingPair} initial quantity {InitialQuantity} is not within the expected range of {MinQty} and {MaxQty}",
-                            pair, pairConfiguration.InitialQuantity, minQty, maxQty);
-                        Console.WriteLine($"Active trading pair {pair} initial quantity {pairConfiguration.InitialQuantity} is not within the expected range of {minQty} and {maxQty}");
-                        return false;
-                    }
-                }
-                else
-                {
-                    _logger.LogError("Invalid initial quantity value for active trading pair {ActiveTradingPair}", pair);
-                    Console.WriteLine($"Invalid initial quantity value for active trading pair {pair}");
-                    return false;
-                }
-
-                // Check if initial quantity is correct for quantity step size
-                if (pairConfiguration.InitialQuantity is not null &&
-                    TryParseDecimal(instrumentList.LotSizeFilter?.QtyStep, out decimal qtyStep))
-                {
-                    if ((pairConfiguration.InitialQuantity - minQty) % qtyStep != 0)
-                    {
-                        _logger.LogError("Active trading pair {ActiveTradingPair} initial quantity {InitialQuantity} is not correct for quantity step size {QtyStep}",
-                            pair, pairConfiguration.InitialQuantity, qtyStep);
-                        Console.WriteLine($"Active trading pair {pair} initial quantity {pairConfiguration.InitialQuantity} is not correct for quantity step size {qtyStep}");
                         return false;
                     }
                 }
@@ -281,15 +249,11 @@ namespace BybitPerpetualsTradingBot
                     return false;
                 }
 
-                // Check if price and quantity is more than min notional value
-                if (TryParseDecimal(instrumentList.LotSizeFilter?.MinNotionalValue, out decimal minNotionalValue) &&
-                    TryParseDecimal(responseTickers.Result?.List?.FirstOrDefault()?.LastPrice, out decimal lastPrice) &&
-                    lastPrice * pairConfiguration.InitialQuantity.GetValueOrDefault() < minNotionalValue)
+                // Check if initial margin is set and greater than 0
+                if (pairConfiguration.InitialMargin is not decimal initialMargin || initialMargin <= 0)
                 {
-                    decimal notionalValue = lastPrice * pairConfiguration.InitialQuantity.GetValueOrDefault();
-                    _logger.LogError("Active trading pair {ActiveTradingPair} initial quantity {InitialQuantity} * latest price {LastPrice} results in notional value {NotionalValue}, which is less than the min notional value {MinNotionalValue}",
-                        pair, pairConfiguration.InitialQuantity, lastPrice, notionalValue, minNotionalValue);
-                    Console.WriteLine($"Active trading pair {pair} initial quantity {pairConfiguration.InitialQuantity} * latest price {lastPrice} results in notional value {notionalValue}, which is less than the min notional value {minNotionalValue}");
+                    _logger.LogError("Initial margin is not set or is zero/negative for active trading pair {ActiveTradingPair}", pair);
+                    Console.WriteLine($"Initial margin is not set or is zero/negative for active trading pair {pair}");
                     return false;
                 }
             }
@@ -414,13 +378,33 @@ namespace BybitPerpetualsTradingBot
                 if (!TryParseDecimal(ActiveTradingPair.Position.Size, out decimal updatedSize) || updatedSize > 0)
                     continue;
 
+                decimal adjustedQuantity = 0;
+                // Calculate and check if price and quantity is more than min notional value
+                if (TryParseDecimal(_instrumentsInfo[Symbol].LotSizeFilter?.MinNotionalValue, out decimal minNotionalValue) &&
+                    TryParseDecimal(_instrumentsInfo[Symbol].LotSizeFilter?.QtyStep, out decimal qtyStep) &&
+                    TryParseDecimal(responseTickers.Result?.List?.FirstOrDefault()?.LastPrice, out decimal lastPrice))
+                {
+                    decimal rawQuantity = (ActiveTradingPair.Configuration.InitialMargin.GetValueOrDefault() * ActiveTradingPair.Configuration.Leverage.GetValueOrDefault()) / lastPrice;
+                    adjustedQuantity = Math.Floor(rawQuantity / qtyStep) * qtyStep;
+
+                    decimal notionalValue = adjustedQuantity * lastPrice;
+
+                    if (notionalValue < minNotionalValue)
+                    {
+                        _logger.LogError("Active trading pair {ActiveTradingPair}: calculated quantity {Quantity} * latest price {LastPrice} results in notional value {NotionalValue}, which is less than the min notional value {MinNotionalValue}",
+                            Symbol, adjustedQuantity, lastPrice, notionalValue, minNotionalValue);
+                        Console.WriteLine($"Active trading pair {Symbol}: calculated quantity {adjustedQuantity} * latest price {lastPrice} results in notional value {notionalValue}, which is less than the min notional value {minNotionalValue}");
+                        continue;
+                    }
+                }
+
                 // Place initial order
                 ApiResponse<OrderResult, object>? responsePlaceOrder = await PlaceOrder(
                     Category.Linear,
                     Symbol,
-                    ActiveTradingPair.Configuration.Side!,
+                    ActiveTradingPair.Configuration.Side,
                     OrderType.Limit,
-                    ActiveTradingPair.Configuration.InitialQuantity.ToString()!,
+                    adjustedQuantity.ToString(),
                     orderPrice.ToString(),
                     TimeInForce.PostOnly);
                 if (responsePlaceOrder?.RetCode != 0)
@@ -616,9 +600,12 @@ namespace BybitPerpetualsTradingBot
                         return false;
                     }
 
-                    // Check if position size is more than initial quantity
-                    if (!TryParseDecimal(responsePositionInfo.Result?.List?.FirstOrDefault()?.Size, out decimal updatedSize) || updatedSize > ActiveTradingPair.Configuration.InitialQuantity)
+                    // Check if positionIM is valid and not more than 50% above InitialMargin
+                    if (!TryParseDecimal(responsePositionInfo.Result?.List?.FirstOrDefault()?.PositionIM, out decimal positionIM)
+                        || ActiveTradingPair.Configuration.InitialMargin is not decimal initialMargin
+                        || positionIM > initialMargin * 1.5m)
                         continue;
+
                 }
 
                 if (ActiveTradingPair.ScalingLevels.Count <= 0)
@@ -641,7 +628,7 @@ namespace BybitPerpetualsTradingBot
                         new()
                         {
                             Category = Category.Linear,
-                            Request = scalingLevelsBatch.Select(scalingLevel =>
+                            Request = [.. scalingLevelsBatch.Select(scalingLevel =>
                             new BatchOrderRequest()
                             {
                                 Symbol = Symbol,
@@ -650,7 +637,7 @@ namespace BybitPerpetualsTradingBot
                                 Qty = scalingLevel.Quantity.ToString(),
                                 Price = scalingLevel.Price.ToString(),
                                 TimeInForce = TimeInForce.PostOnly
-                            }).ToList()
+                            })]
                         });
 
                     if (responseBatchOrder?.RetCode != 0)

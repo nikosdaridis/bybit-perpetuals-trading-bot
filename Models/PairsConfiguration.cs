@@ -11,7 +11,7 @@
                 {
                     Side = "Buy",
                     Leverage = 20m,
-                    InitialQuantity = 0.001m,
+                    InitialMargin = 2m,
                     TakeProfitPercentage = 10m,
                     NumberOfScalingLevels = 15,
                     InitialScalingUnrealizedPnL = 100m,
@@ -25,7 +25,7 @@
                 {
                     Side = "Buy",
                     Leverage = 20m,
-                    InitialQuantity = 0.01m,
+                    InitialMargin = 2m,
                     TakeProfitPercentage = 10m,
                     NumberOfScalingLevels = 15,
                     InitialScalingUnrealizedPnL = 100m,
@@ -40,7 +40,7 @@
         {
             public string? Side { get; set; }
             public decimal? Leverage { get; set; }
-            public decimal? InitialQuantity { get; set; }
+            public decimal? InitialMargin { get; set; }
             public decimal? TakeProfitPercentage { get; set; }
             public int? NumberOfScalingLevels { get; set; }
             public decimal? InitialScalingUnrealizedPnL { get; set; }
