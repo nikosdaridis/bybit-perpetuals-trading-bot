@@ -6,7 +6,8 @@ namespace BybitPerpetualsTradingBot.Models
     {
         public string APIKey { get; set; } = string.Empty;
         public string APISecret { get; set; } = string.Empty;
-        public string Endpoint { get; set; } = "https://api-demo.bybit.com/v5/{product}/{module}";
+        public ushort APIRateLimit { get; set; } = 10;
+        public string Endpoint { get; set; } = "https://api.bybit.com/v5/{product}/{module}";
         public string RecvWindow { get; set; } = "20000";
         public SerilogConfig Logs { get; set; } = new();
 

@@ -57,7 +57,7 @@ namespace BybitPerpetualsTradingBot
         }
 
         /// <summary>
-        /// Loads data from file or creates file with default data
+        /// Loads data from file or backups current file and creates a default file
         /// </summary>
         internal static T LoadFileData<T>(string filePath) where T : new()
         {
@@ -76,8 +76,26 @@ namespace BybitPerpetualsTradingBot
 
                 return JsonConvert.DeserializeObject<T>(jsonContent) ?? defaultModel;
             }
-            catch
+            catch (Exception ex)
             {
+                Console.WriteLine($"Error reading file '{filePath}': {ex.Message}");
+
+                if (File.Exists(filePath))
+                {
+                    try
+                    {
+                        string timestamp = DateTime.Now.ToString("MMddHHmmss");
+                        string backupFilePath = Path.ChangeExtension(filePath, $".broken.{timestamp}.json");
+
+                        File.Move(filePath, backupFilePath);
+                        Console.WriteLine($"Existing file backed up as {backupFilePath}");
+                    }
+                    catch (Exception backupEx)
+                    {
+                        Console.WriteLine($"Failed to back up the existing file: {backupEx.Message}");
+                    }
+                }
+
                 string defaultJson = JsonConvert.SerializeObject(defaultModel, Formatting.Indented);
                 File.WriteAllText(filePath, defaultJson);
                 return defaultModel;
@@ -391,7 +409,7 @@ namespace BybitPerpetualsTradingBot
                     if (adjustedQuantity < minOrderQty)
                     {
                         _logger.LogError("Active trading pair {ActiveTradingPair}: adjusted quantity {AdjustedQuantity} is below MinOrderQty {MinOrderQty}. Raw quantity: {RawQuantity}",
-                            ActiveTradingPair, adjustedQuantity, minOrderQty, rawQuantity);
+                            Symbol, adjustedQuantity, minOrderQty, rawQuantity);
                         Console.WriteLine($"Active trading pair {Symbol}: adjusted quantity {adjustedQuantity} is below MinOrderQty {minOrderQty}. Raw quantity: {rawQuantity}");
                         continue;
                     }

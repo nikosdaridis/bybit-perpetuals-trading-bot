@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using BybitPerpetualsTradingBot.Models;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using System.Text;
 
@@ -8,33 +9,33 @@ namespace BybitPerpetualsTradingBot
     {
         private readonly HttpClient _httpClient;
         private readonly ILogger<BaseHttpClient> _logger;
-        private readonly Timer _timer;
+        private readonly RateLimiter _rateLimiter;
+        private readonly Settings _settings;
         private static uint _requestCount = 0;
 
         public BaseHttpClient(HttpClient httpClient, ILogger<BaseHttpClient> logger)
         {
             _httpClient = httpClient;
             _logger = logger;
-            _timer = new Timer(PrintRequestsPerSecond, null, TimeSpan.Zero, TimeSpan.FromSeconds(1));
+
+            _settings = TradingBotHelper.LoadFileData<Settings>(TradingBotHelper.settingsFilePath);
+            _rateLimiter = new(_settings.APIRateLimit, TimeSpan.FromSeconds(1));
+            _ = new Timer(PrintRequestsPerSecond, null, TimeSpan.Zero, TimeSpan.FromSeconds(1));
         }
 
         /// <summary>
-        /// GET request to specified URI and returns deserialized response
+        /// GET request and returns deserialized response
         /// </summary>
         public async Task<TResponse?> GetAsync<TResponse>(string uri, string apiKey, string timestamp, string signature, string recvWindow = "5000")
         {
             HttpRequestMessage request = new(HttpMethod.Get, uri);
-
-            request.Headers.Add("X-BAPI-API-KEY", apiKey);
-            request.Headers.Add("X-BAPI-TIMESTAMP", timestamp);
-            request.Headers.Add("X-BAPI-SIGN", signature);
-            request.Headers.Add("X-BAPI-RECV-WINDOW", recvWindow);
+            AddHeaders(request, apiKey, timestamp, signature, recvWindow);
 
             return await SendAsync<TResponse>(request);
         }
 
         /// <summary>
-        /// POST request to specified URI with payload and headers and returns deserialized response
+        /// POST request and returns deserialized response
         /// </summary>
         public async Task<TResponse?> PostAsync<TResponse>(string uri, string jsonPayload, string apiKey, string timestamp, string signature, string recvWindow = "5000")
         {
@@ -42,11 +43,7 @@ namespace BybitPerpetualsTradingBot
             {
                 Content = new StringContent(jsonPayload, Encoding.UTF8, "application/json")
             };
-
-            request.Headers.Add("X-BAPI-API-KEY", apiKey);
-            request.Headers.Add("X-BAPI-TIMESTAMP", timestamp);
-            request.Headers.Add("X-BAPI-SIGN", signature);
-            request.Headers.Add("X-BAPI-RECV-WINDOW", recvWindow);
+            AddHeaders(request, apiKey, timestamp, signature, recvWindow);
 
             return await SendAsync<TResponse>(request);
         }
@@ -56,7 +53,9 @@ namespace BybitPerpetualsTradingBot
         /// </summary>
         protected async Task<TResponse?> SendAsync<TResponse>(HttpRequestMessage request)
         {
+            await _rateLimiter.WaitAsync();
             Interlocked.Increment(ref _requestCount);
+
             using HttpResponseMessage response = await _httpClient.SendAsync(request);
 
             if (!response.IsSuccessStatusCode)
@@ -86,6 +85,17 @@ namespace BybitPerpetualsTradingBot
 
                 return default;
             }
+        }
+
+        /// <summary>
+        /// Adds headers to HTTP request
+        /// </summary>
+        private static void AddHeaders(HttpRequestMessage request, string apiKey, string timestamp, string signature, string recvWindow)
+        {
+            request.Headers.Add("X-BAPI-API-KEY", apiKey);
+            request.Headers.Add("X-BAPI-TIMESTAMP", timestamp);
+            request.Headers.Add("X-BAPI-SIGN", signature);
+            request.Headers.Add("X-BAPI-RECV-WINDOW", recvWindow);
         }
 
         /// <summary>

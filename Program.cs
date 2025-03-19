@@ -9,7 +9,7 @@ namespace BybitPerpetualsTradingBot
     {
         private readonly ILogger<TradingBot> _logger = logger;
         private readonly SemaphoreSlim semaphoreSlim = new(1, 1);
-        private TradingBotState _state = new();
+        private readonly TradingBotState _state = new();
 
         static async Task Main()
         {
