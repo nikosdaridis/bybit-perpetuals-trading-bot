@@ -25,12 +25,12 @@ namespace BybitPerpetualsTradingBot
         [GeneratedRegex(@"\{[^{}]+\}", RegexOptions.Compiled)]
         private static partial Regex RouteParameterRegex();
 
-        private static BaseHttpClient _baseHttpClient;
-        private static ILogger<TradingBot> _logger;
-        private static Settings _settings;
-        private static PairsConfiguration _pairsConfiguration;
+        private static BaseHttpClient _baseHttpClient = default!;
+        private static ILogger<TradingBot> _logger = default!;
+        private static Settings _settings = default!;
+        private static PairsConfiguration _pairsConfiguration = default!;
         private static Dictionary<string, InstrumentList> _instrumentsInfo = [];
-        private static Dictionary<string, ActiveTradingPair> _activeTradingPairs = [];
+        private static readonly Dictionary<string, ActiveTradingPair> _activeTradingPairs = [];
 
         private readonly static JsonSerializerSettings _jsonSerializerSettings = new()
         {
@@ -79,21 +79,20 @@ namespace BybitPerpetualsTradingBot
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error reading file '{filePath}': {ex.Message}");
+                LogAndPrint(LogLevel.Error, "Invalid Json - Error reading file '{0}': {1}", filePath, ex.Message);
 
                 if (File.Exists(filePath))
                 {
                     try
                     {
-                        string timestamp = DateTime.Now.ToString("MMddHHmmss");
-                        string backupFilePath = Path.ChangeExtension(filePath, $".broken.{timestamp}.json");
+                        string backupFilePath = Path.ChangeExtension(filePath, $".invalid.{DateTime.Now:MMddHHmmss}.json");
 
                         File.Move(filePath, backupFilePath);
-                        Console.WriteLine($"Existing file backed up as {backupFilePath}");
+                        LogAndPrint(LogLevel.Warning, "Existing file backed up as {0}", backupFilePath);
                     }
                     catch (Exception backupEx)
                     {
-                        Console.WriteLine($"Failed to back up the existing file: {backupEx.Message}");
+                        LogAndPrint(LogLevel.Error, "Failed to back up the existing file: {0}", backupEx.Message);
                     }
                 }
 
@@ -104,7 +103,7 @@ namespace BybitPerpetualsTradingBot
         }
 
         /// <summary>
-        /// Executes trading tasks concurrently
+        /// Executes trading tasks concurrently for pairs
         /// </summary>
         internal static async Task ExecuteTasksConcurrently(List<Func<string, ActiveTradingPair, Task<bool>>> taskFuncs)
         {
@@ -124,13 +123,13 @@ namespace BybitPerpetualsTradingBot
                         pairStopwatch.Stop();
 
                         if (result)
-                            LogAndPrint(LogLevel.Information, "[{TaskName}] {TradingPair} {ElapsedSeconds:F1} sec", taskFunc.Method.Name, pair.Key, pairStopwatch.Elapsed.TotalSeconds);
+                            LogAndPrint(LogLevel.Information, "({0}) {1} {2:F1} sec", taskFunc.Method.Name, pair.Key, pairStopwatch.Elapsed.TotalSeconds);
 
                         return result;
                     }
                     catch (Exception ex)
                     {
-                        LogAndPrint(LogLevel.Error, "[{TaskName}] Exception in task execution for {TradingPair}: {ExceptionMessage}", taskFunc.Method.Name, pair.Key, ex.Message);
+                        LogAndPrint(LogLevel.Error, "({0}) Exception in task execution for {1}: {2}", taskFunc.Method.Name, pair.Key, ex.Message);
                         return false;
                     }
                     finally
@@ -143,17 +142,18 @@ namespace BybitPerpetualsTradingBot
             }
 
             stopwatch.Stop();
-            double totalElapsedSeconds = stopwatch.Elapsed.TotalSeconds;
-
             Console.ForegroundColor = ConsoleColor.DarkGreen;
-            Console.WriteLine($"Loop done {totalElapsedSeconds:F1} sec");
+            Console.WriteLine($"Loop done {stopwatch.Elapsed.TotalSeconds:F1} sec");
         }
 
         /// <summary>
-        /// Initializes active trading pairs and validates pairs configuration data with instruments info and adds position info, open orders
+        /// Initializes active trading pairs and validates pairs configuration data with instruments info and adds position info
         /// </summary>
         internal static async Task<bool> InitializeActiveTradingPairs()
         {
+            Console.ForegroundColor = ConsoleColor.DarkYellow;
+            Console.WriteLine("Initializing active trading pairs and validating configuration data");
+
             ApiResponse<GetInstrumentsInfoResult, object>? responseInstrumentsInfo = await GetInstrumentsInfo(Category.Linear);
             if (responseInstrumentsInfo?.RetCode != 0)
             {
@@ -196,77 +196,95 @@ namespace BybitPerpetualsTradingBot
                 }
 
                 // Check if side is Buy or Sell
-                if (pairConfiguration.Side is not null && (pairConfiguration.Side != Side.Buy && pairConfiguration.Side != Side.Sell))
+                if (pairConfiguration.Side is null || (pairConfiguration.Side != Side.Buy && pairConfiguration.Side != Side.Sell))
                 {
                     LogAndPrint(LogLevel.Error, "Active trading pair {0} side {1} is invalid", pair, pairConfiguration.Side);
                     return false;
                 }
 
-                // Check if leverage is within expected range
-                if (pairConfiguration.Leverage is not null &&
-                    TryParseDecimal(instrumentList.LeverageFilter?.MinLeverage, out decimal minLeverage) &&
-                    TryParseDecimal(instrumentList.LeverageFilter?.MaxLeverage, out decimal maxLeverage))
+                //Check if leverage is more then 0
+                if (pairConfiguration.Leverage is null || pairConfiguration.Leverage <= 0)
                 {
-                    if (pairConfiguration.Leverage < minLeverage || pairConfiguration.Leverage > maxLeverage)
+                    LogAndPrint(LogLevel.Error, "Active trading pair {0} leverage {1} is invalid", pair, pairConfiguration.Leverage);
+                    return false;
+                }
+
+                // Check if leverage is within expected range and step
+                if (TryParseDecimal(instrumentList.LeverageFilter?.MinLeverage, out decimal minLeverage) &&
+                    TryParseDecimal(instrumentList.LeverageFilter?.MaxLeverage, out decimal maxLeverage) &&
+                    TryParseDecimal(instrumentList.LeverageFilter?.LeverageStep, out decimal leverageStep))
+                {
+                    if (pairConfiguration.Leverage < minLeverage || pairConfiguration.Leverage > maxLeverage || (pairConfiguration.Leverage - minLeverage) % leverageStep != 0)
                     {
-                        LogAndPrint(LogLevel.Error, "Active trading pair {0} leverage {1} is not within the expected range of {2} and {3}", pair, pairConfiguration.Leverage, minLeverage, maxLeverage);
+                        LogAndPrint(LogLevel.Error, "Active trading pair {0} leverage {1} is invalid", pair, pairConfiguration.Leverage);
                         return false;
                     }
                 }
                 else
                 {
-                    LogAndPrint(LogLevel.Error, "Invalid leverage value for active trading pair {0}", pair);
+                    LogAndPrint(LogLevel.Error, "Active trading pair {0} leverage filter data is invalid", pair);
                     return false;
                 }
 
-                // Check if leverage is correct for leverage step size
-                if (pairConfiguration.Leverage is not null &&
-                    TryParseDecimal(instrumentList.LeverageFilter?.LeverageStep, out decimal leverageStep))
+                //Check if initial margin is not negative
+                if (pairConfiguration.InitialMargin is null || pairConfiguration.InitialMargin < 0)
                 {
-                    if ((pairConfiguration.Leverage - minLeverage) % leverageStep != 0)
-                    {
-                        LogAndPrint(LogLevel.Error, "Active trading pair {0} leverage {1} is not correct for leverage step size {2}", pair, pairConfiguration.Leverage, leverageStep);
-                        return false;
-                    }
+                    LogAndPrint(LogLevel.Error, "Active trading pair {0} initial margin {1} is invalid", pair, pairConfiguration.InitialMargin);
+                    return false;
                 }
 
-                //Check if number of steps is more than 0
-                if (pairConfiguration.NumberOfScalingLevels is not null && pairConfiguration.NumberOfScalingLevels <= 0)
+                //Check if initial order tick size is not negative
+                if (pairConfiguration.InitialOrderTickSize is null || pairConfiguration.InitialOrderTickSize < 0)
                 {
-                    LogAndPrint(LogLevel.Error, "Active trading pair {0} number of steps {1} is invalid", pair, pairConfiguration.NumberOfScalingLevels);
+                    LogAndPrint(LogLevel.Error, "Active trading pair {0} initial order tick size {1} is invalid", pair, pairConfiguration.InitialOrderTickSize);
+                    return false;
+                }
+
+                //Check if initial order tick size threshold is more than 0 and more than initial order tick size
+                if (pairConfiguration.InitialOrderTickSizeThreshold is null || pairConfiguration.InitialOrderTickSizeThreshold <= 0 ||
+                    pairConfiguration.InitialOrderTickSizeThreshold <= pairConfiguration.InitialOrderTickSize)
+                {
+                    LogAndPrint(LogLevel.Error, "Active trading pair {0} initial order tick size threshold {1} is invalid", pair, pairConfiguration.InitialOrderTickSizeThreshold);
                     return false;
                 }
 
                 // Check if take profit percentage is more than 0
-                if (pairConfiguration.TakeProfitPercentage is not null && pairConfiguration.TakeProfitPercentage <= 0)
+                if (pairConfiguration.TakeProfitPercentage is null || pairConfiguration.TakeProfitPercentage <= 0)
                 {
                     LogAndPrint(LogLevel.Error, "Active trading pair {0} take profit percentage {1} is invalid", pair, pairConfiguration.TakeProfitPercentage);
                     return false;
                 }
 
+                //Check if number of scaling levels is not negative
+                if (pairConfiguration.NumberOfScalingLevels is null || pairConfiguration.NumberOfScalingLevels < 0)
+                {
+                    LogAndPrint(LogLevel.Error, "Active trading pair {0} number of scaling levels {1} is invalid", pair, pairConfiguration.NumberOfScalingLevels);
+                    return false;
+                }
+
                 // Check if initial step unrealised PnL percentage is more than 0
-                if (pairConfiguration.InitialScalingUnrealizedPnL is not null && pairConfiguration.InitialScalingUnrealizedPnL <= 0)
+                if (pairConfiguration.InitialScalingUnrealizedPnL is null || pairConfiguration.InitialScalingUnrealizedPnL <= 0)
                 {
                     LogAndPrint(LogLevel.Error, "Active trading pair {0} initial step unrealised PnL percentage {1} is invalid", pair, pairConfiguration.InitialScalingUnrealizedPnL);
                     return false;
                 }
 
                 // Check if max step unrealised PnL percentage is more than initial step unrealised PnL percentage
-                if (pairConfiguration.MaxScalingUnrealizedPnL is not null && pairConfiguration.MaxScalingUnrealizedPnL < pairConfiguration.InitialScalingUnrealizedPnL)
+                if (pairConfiguration.MaxScalingUnrealizedPnL is null || pairConfiguration.MaxScalingUnrealizedPnL < pairConfiguration.InitialScalingUnrealizedPnL)
                 {
                     LogAndPrint(LogLevel.Error, "Active trading pair {0} max step unrealised PnL percentage {1} is invalid", pair, pairConfiguration.MaxScalingUnrealizedPnL);
                     return false;
                 }
 
                 // Check if step unrealised PnL multiplier is more than 0
-                if (pairConfiguration.ScalingUnrealisedPnlMultiplier is not null && pairConfiguration.ScalingUnrealisedPnlMultiplier <= 0)
+                if (pairConfiguration.ScalingUnrealisedPnlMultiplier is null || pairConfiguration.ScalingUnrealisedPnlMultiplier <= 0)
                 {
                     LogAndPrint(LogLevel.Error, "Active trading pair {0} step unrealised PnL multiplier {1} is invalid", pair, pairConfiguration.ScalingUnrealisedPnlMultiplier);
                     return false;
                 }
 
                 // Check if step quantity multiplier is more than 0
-                if (pairConfiguration.ScalingQuantityMultiplier is not null && pairConfiguration.ScalingQuantityMultiplier <= 0)
+                if (pairConfiguration.ScalingQuantityMultiplier is null || pairConfiguration.ScalingQuantityMultiplier <= 0)
                 {
                     LogAndPrint(LogLevel.Error, "Active trading pair {0} step quantity multiplier {1} is invalid", pair, pairConfiguration.ScalingQuantityMultiplier);
                     return false;
@@ -293,22 +311,15 @@ namespace BybitPerpetualsTradingBot
                     LogAndPrint(LogLevel.Error, "Error getting tickers for active trading pair {0}: {1}", pair, responseTickers?.RetMsg);
                     return false;
                 }
-
-                // Check if initial margin is set and greater than 0
-                if (pairConfiguration.InitialMargin is not decimal initialMargin || initialMargin <= 0)
-                {
-                    LogAndPrint(LogLevel.Error, "Initial margin is not set or is zero/negative for active trading pair {0}", pair);
-                    return false;
-                }
             }
 
             return true;
         }
 
         /// <summary>
-        /// Places initial positions for active trading pairs if position size is 0
+        /// Places initial position for active trading pair
         /// </summary>
-        internal static async Task<bool> PlaceInitialPositions(string Symbol, ActiveTradingPair ActiveTradingPair)
+        internal static async Task<bool> PlaceInitialPosition(string Symbol, ActiveTradingPair ActiveTradingPair)
         {
             // Get position info
             ApiResponse<GetPositionInfoResult, object>? responsePositionInfo = await GetPositionInfo(Category.Linear, Symbol);
@@ -319,7 +330,7 @@ namespace BybitPerpetualsTradingBot
             }
             ActiveTradingPair.Position = responsePositionInfo?.Result?.List?.FirstOrDefault() ?? new();
 
-            // Check if position size is 0 to place initial order
+            // Check if position size is 0
             if (!TryParseDecimal(ActiveTradingPair.Position.Size, out decimal size) || size != 0)
                 return false;
 
@@ -343,14 +354,14 @@ namespace BybitPerpetualsTradingBot
             if (responseOpenOrders.Result?.List?.Any(order => order.OrderStatus == OrderStatus.PartiallyFilled) == true)
                 return false;
 
-            // Check if there is open order with price close to last price within 6 tick size to wait for it to be filled
+            // Check if there is open order with price close to last price within tick size threshold to wait for it to be filled
             if (responseOpenOrders.Result?.List?.Any(order =>
             {
                 if (TryParseDecimal(order.Price, out decimal orderPrice) &&
                     TryParseDecimal(responseTickers.Result?.List?.FirstOrDefault()?.LastPrice, out decimal lastPrice) &&
                     TryParseDecimal(_instrumentsInfo[Symbol].PriceFilter?.TickSize, out decimal tickSize))
                 {
-                    return Math.Abs(orderPrice - lastPrice) < 6 * tickSize;
+                    return Math.Abs(orderPrice - lastPrice) < tickSize * ActiveTradingPair.Configuration.InitialOrderTickSizeThreshold;
                 }
 
                 return false;
@@ -375,19 +386,19 @@ namespace BybitPerpetualsTradingBot
             if (leverage != ActiveTradingPair.Configuration.Leverage)
             {
                 ApiResponse<object, object>? responseSetLeverage = await SetLeverage(Category.Linear, Symbol, ActiveTradingPair.Configuration.Leverage.ToString()!, ActiveTradingPair.Configuration.Leverage.ToString()!);
-                if (responseSetLeverage?.RetCode != 0 && responseSetLeverage?.RetCode != 110043)
+                if (responseSetLeverage?.RetCode != 0 && responseSetLeverage?.RetCode != 110043) // 110043: leverage is the same
                 {
                     LogAndPrint(LogLevel.Error, "Error setting leverage for active trading pair {0}: {1}", Symbol, responseSetLeverage?.RetMsg);
                     return false;
                 }
             }
 
-            // Calculate order price based on bid or ask price offset by 2 tick size
+            // Calculate order price based on bid or ask price offset by initial order tick size
             decimal orderPrice;
             (string? priceString, int priceModifier) = ActiveTradingPair.Configuration.Side switch
             {
-                Side.Buy => (responseTickers.Result?.List?.FirstOrDefault()?.Bid1Price, -2),
-                Side.Sell => (responseTickers.Result?.List?.FirstOrDefault()?.Ask1Price, 2),
+                Side.Buy => (responseTickers.Result?.List?.FirstOrDefault()?.Bid1Price, -(ActiveTradingPair.Configuration.InitialOrderTickSize ?? 2)),
+                Side.Sell => (responseTickers.Result?.List?.FirstOrDefault()?.Ask1Price, ActiveTradingPair.Configuration.InitialOrderTickSize ?? 2),
                 _ => throw new InvalidOperationException($"Unsupported trading side: {ActiveTradingPair.Configuration.Side}")
             };
 
@@ -409,11 +420,11 @@ namespace BybitPerpetualsTradingBot
             ActiveTradingPair.Position = responsePositionInfo?.Result?.List?.FirstOrDefault() ?? new();
 
             // Check if position size is more than 0 to prevent placing duplicate initial order
-            if (!TryParseDecimal(ActiveTradingPair.Position.Size, out decimal updatedSize) || updatedSize > 0)
+            if (!TryParseDecimal(ActiveTradingPair.Position.Size, out decimal latestSize) || latestSize > 0)
                 return false;
 
+            // Calculate quantity based on leverage, initial margin and qty step and check if it is more than min order qty and min notional value
             decimal adjustedQuantity = 0;
-            // Calculate and check if price and quantity is more than min notional value
             if (TryParseDecimal(_instrumentsInfo[Symbol].LotSizeFilter?.MinNotionalValue, out decimal minNotionalValue) &&
                 TryParseDecimal(_instrumentsInfo[Symbol].LotSizeFilter?.QtyStep, out decimal qtyStep) &&
                 TryParseDecimal(_instrumentsInfo[Symbol].LotSizeFilter?.MinOrderQty, out decimal minOrderQty) &&
@@ -452,6 +463,7 @@ namespace BybitPerpetualsTradingBot
                 return false;
             }
 
+            // Update active trading pair with calculated initial quantity and reset scaling levels
             ActiveTradingPair.CalculatedInitialQuantity = adjustedQuantity;
             ActiveTradingPair.ScalingLevels = [];
             ActiveTradingPair.ScalingLevelsToBePlaced = [];
@@ -460,9 +472,9 @@ namespace BybitPerpetualsTradingBot
         }
 
         /// <summary>
-        /// Places take profit orders for active trading pairs if position size is more than 0 and no open orders or amend orders with new price and quantity
+        /// Places or amends take profit orders for active trading pair
         /// </summary>
-        internal static async Task<bool> PlaceTakeProfitOrders(string Symbol, ActiveTradingPair ActiveTradingPair)
+        internal static async Task<bool> PlaceOrAmendTakeProfitOrder(string Symbol, ActiveTradingPair ActiveTradingPair)
         {
             // Get and update position info
             ApiResponse<GetPositionInfoResult, object>? responsePositionInfo = await GetPositionInfo(Category.Linear, Symbol);
@@ -473,7 +485,7 @@ namespace BybitPerpetualsTradingBot
             }
             ActiveTradingPair.Position = responsePositionInfo?.Result?.List?.FirstOrDefault() ?? new();
 
-            // Check if position size is more than 0 to place reduce only order
+            // Check if position size is more than 0
             if (!TryParseDecimal(ActiveTradingPair.Position.Size, out decimal size) || size <= 0)
                 return false;
 
@@ -500,14 +512,13 @@ namespace BybitPerpetualsTradingBot
             string takeProfitSide = ActiveTradingPair.Configuration.Side == Side.Buy ? Side.Sell : Side.Buy;
             decimal takeProfitFactor = ActiveTradingPair.Configuration.TakeProfitPercentage!.Value / (100 * ActiveTradingPair.Configuration.Leverage!.Value);
             decimal takeProfitPrice;
+
             if (ActiveTradingPair.Configuration.Side == Side.Buy)
                 takeProfitPrice = averagePrice * (1 + takeProfitFactor);
             else
                 takeProfitPrice = averagePrice * (1 - takeProfitFactor);
 
-            takeProfitPrice = Math.Round(takeProfitPrice / priceTickSize) * priceTickSize;
-            takeProfitPrice = takeProfitPrice.Normalize();
-
+            takeProfitPrice = (Math.Round(takeProfitPrice / priceTickSize) * priceTickSize).Normalize();
             GetOpenAndClosedOrdersDetails? takeProfitOrder = responseOpenOrders.Result?.List?.FirstOrDefault(order => order.ReduceOnly.GetValueOrDefault());
 
             // Check if take profit price is different from take profit order price to amend order with new price and quantity
@@ -536,7 +547,7 @@ namespace BybitPerpetualsTradingBot
                 return false;
             }
 
-            if (!TryParseDecimal(responseTickers.Result?.List?.FirstOrDefault()?.LastPrice, out decimal lastPrice) || averagePrice <= 0)
+            if (!TryParseDecimal(responseTickers.Result?.List?.FirstOrDefault()?.LastPrice, out decimal lastPrice) || lastPrice <= 0)
             {
                 LogAndPrint(LogLevel.Error, "Error parsing last price for active trading pair {0}", Symbol);
                 return false;
@@ -589,7 +600,7 @@ namespace BybitPerpetualsTradingBot
         }
 
         /// <summary>
-        /// Places scaling orders for active trading pairs in batches of 10 maximum
+        /// Places scaling orders for active trading pair in batches of 10 max
         /// </summary>
         internal static async Task<bool> PlaceScalingOrders(string Symbol, ActiveTradingPair ActiveTradingPair)
         {
@@ -610,8 +621,7 @@ namespace BybitPerpetualsTradingBot
                 }
 
                 // Check if there is any open order with same side
-                if (responseOpenOrders.Result?.List?.Any(order =>
-                    order.Side == ActiveTradingPair.Configuration.Side) == true)
+                if (responseOpenOrders.Result?.List?.Any(order => order.Side == ActiveTradingPair.Configuration.Side) == true)
                     return false;
 
                 // Get positon info
@@ -636,10 +646,10 @@ namespace BybitPerpetualsTradingBot
                 }
             }
 
-            // Batch place orders in groups of 10
+            // Batch place orders in groups of 10 max
             while (ActiveTradingPair.ScalingLevelsToBePlaced.Count > 0)
             {
-                List<ScalingLevel> scalingLevelsBatch = ActiveTradingPair.ScalingLevelsToBePlaced.Take(10).ToList();
+                List<ScalingLevel> scalingLevelsBatch = [.. ActiveTradingPair.ScalingLevelsToBePlaced.Take(10)];
 
                 // Place batch order
                 ApiResponse<BatchOrderResult, BatchOrderRetExtInfo>? responseBatchOrder = await BatchPlaceOrder(
@@ -672,13 +682,16 @@ namespace BybitPerpetualsTradingBot
                     return false;
                 }
 
+                List<GetOpenAndClosedOrdersDetails> openOrders = responseOpenOrders.Result?.List ?? [];
+
                 // Remove successfully placed orders from scaling levels to be placed
-                ActiveTradingPair.ScalingLevelsToBePlaced.Where(scalingLevel => responseOpenOrders.Result?.List?.Any(order =>
-                    order.Side == ActiveTradingPair.Configuration.Side &&
-                    TryParseDecimal(order.Price, out decimal orderPrice) &&
-                    TryParseDecimal(order.Quantity, out decimal orderQuantity) &&
-                    scalingLevel.Price == orderPrice &&
-                    scalingLevel.Quantity == orderQuantity) == true).ToList().ForEach(scalingLevel => ActiveTradingPair.ScalingLevelsToBePlaced.Remove(scalingLevel));
+                ActiveTradingPair.ScalingLevelsToBePlaced.RemoveAll(scalingLevel =>
+                    openOrders.Any(order =>
+                        order.Side == ActiveTradingPair.Configuration.Side &&
+                        TryParseDecimal(order.Price, out decimal orderPrice) &&
+                        TryParseDecimal(order.Quantity, out decimal orderQuantity) &&
+                        scalingLevel.Price == orderPrice &&
+                        scalingLevel.Quantity == orderQuantity));
 
                 // Check if any order placement failed
                 for (int i = 0; i < responseBatchOrder.RetExtInfo?.List?.Count; i++)
@@ -696,7 +709,7 @@ namespace BybitPerpetualsTradingBot
         }
 
         /// <summary>
-        /// Calculates scaling levels based on configuration
+        /// Calculates scaling levels for active trading pair based on configuration
         /// </summary>
         private static async Task<bool> CalculateScalingLevels(string symbol, ActiveTradingPair activeTradingPair)
         {
@@ -753,8 +766,8 @@ namespace BybitPerpetualsTradingBot
                 pnlFactor *= activeTradingPair.Configuration.ScalingUnrealisedPnlMultiplier.GetValueOrDefault();
             }
 
-            activeTradingPair.ScalingLevels = scalingLevels.ToList();
-            activeTradingPair.ScalingLevelsToBePlaced = scalingLevels;
+            activeTradingPair.ScalingLevels = [.. scalingLevels];
+            activeTradingPair.ScalingLevelsToBePlaced = [.. scalingLevels];
             return true;
         }
 
@@ -774,9 +787,7 @@ namespace BybitPerpetualsTradingBot
 
             string query = string.Join("&", queryParams.Select(kvp => $"{kvp.Key}={kvp.Value}"));
             string uri = BuildUri(_settings.Endpoint, EndpointProduct.Market, string.Concat(EndpointModule.InstrumentsInfo, '?', query));
-
-            string timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
-            string signature = GenerateSignature(_settings, timestamp, query);
+            (string timestamp, string signature) = GenerateSignature(_settings, query);
 
             return await _baseHttpClient.GetAsync<ApiResponse<GetInstrumentsInfoResult, object>?>(uri, _settings.APIKey, timestamp, signature, _settings.RecvWindow);
         }
@@ -794,9 +805,7 @@ namespace BybitPerpetualsTradingBot
 
             string query = string.Join("&", queryParams.Select(kvp => $"{kvp.Key}={kvp.Value}"));
             string uri = BuildUri(_settings.Endpoint, EndpointProduct.Market, string.Concat(EndpointModule.Tickers, '?', query));
-
-            string timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
-            string signature = GenerateSignature(_settings, timestamp, query);
+            (string timestamp, string signature) = GenerateSignature(_settings, query);
 
             return await _baseHttpClient.GetAsync<ApiResponse<GetTickersResult, object>?>(uri, _settings.APIKey, timestamp, signature, _settings.RecvWindow);
         }
@@ -808,9 +817,7 @@ namespace BybitPerpetualsTradingBot
         {
             string query = $"{nameof(category)}={category}&{nameof(symbol)}={symbol.ToUpper()}";
             string uri = BuildUri(_settings.Endpoint, EndpointProduct.Position, string.Concat(EndpointModule.List, '?', query));
-
-            string timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
-            string signature = GenerateSignature(_settings, timestamp, query);
+            (string timestamp, string signature) = GenerateSignature(_settings, query);
 
             return await _baseHttpClient.GetAsync<ApiResponse<GetPositionInfoResult, object>?>(uri, _settings.APIKey, timestamp, signature, _settings.RecvWindow);
         }
@@ -822,9 +829,7 @@ namespace BybitPerpetualsTradingBot
         {
             string query = $"{nameof(category)}={category}&{nameof(symbol)}={symbol.ToUpper()}&{nameof(openOnly)}={openOnly}&{nameof(limit)}={limit}";
             string uri = BuildUri(_settings.Endpoint, EndpointProduct.Order, string.Concat(EndpointModule.RealTime, '?', query));
-
-            string timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
-            string signature = GenerateSignature(_settings, timestamp, query);
+            (string timestamp, string signature) = GenerateSignature(_settings, query);
 
             return await _baseHttpClient.GetAsync<ApiResponse<GetOpenAndClosedOrdersResult, object>?>(uri, _settings.APIKey, timestamp, signature, _settings.RecvWindow);
         }
@@ -844,9 +849,8 @@ namespace BybitPerpetualsTradingBot
                 {nameof(sellLeverage), sellLeverage}
             };
 
-            string timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
             string jsonPayload = JsonConvert.SerializeObject(parameters, _jsonSerializerSettings);
-            string signature = GenerateSignature(_settings, timestamp, jsonPayload);
+            (string timestamp, string signature) = GenerateSignature(_settings, jsonPayload);
 
             return await _baseHttpClient.PostAsync<ApiResponse<object, object>?>(uri, jsonPayload, _settings.APIKey, timestamp, signature, _settings.RecvWindow);
         }
@@ -869,10 +873,8 @@ namespace BybitPerpetualsTradingBot
                     {nameof(timeInForce), timeInForce},
                     {nameof(reduceOnly), reduceOnly}
                 };
-
-            string timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
             string jsonPayload = JsonConvert.SerializeObject(parameters, _jsonSerializerSettings);
-            string signature = GenerateSignature(_settings, timestamp, jsonPayload);
+            (string timestamp, string signature) = GenerateSignature(_settings, jsonPayload);
 
             return await _baseHttpClient.PostAsync<ApiResponse<OrderResult, object>?>(uri, jsonPayload, _settings.APIKey, timestamp, signature, _settings.RecvWindow);
         }
@@ -894,9 +896,8 @@ namespace BybitPerpetualsTradingBot
                     parameters[property.Name.ToLower()] = value;
             }
 
-            string timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
             string jsonPayload = JsonConvert.SerializeObject(parameters, _jsonSerializerSettings);
-            string signature = GenerateSignature(_settings, timestamp, jsonPayload);
+            (string timestamp, string signature) = GenerateSignature(_settings, jsonPayload);
 
             return await _baseHttpClient.PostAsync<ApiResponse<BatchOrderResult, BatchOrderRetExtInfo>?>(uri, jsonPayload, _settings.APIKey, timestamp, signature, _settings.RecvWindow);
         }
@@ -917,9 +918,8 @@ namespace BybitPerpetualsTradingBot
                     {nameof(price), price}
                 };
 
-            string timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
             string jsonPayload = JsonConvert.SerializeObject(parameters, _jsonSerializerSettings);
-            string signature = GenerateSignature(_settings, timestamp, jsonPayload);
+            (string timestamp, string signature) = GenerateSignature(_settings, jsonPayload);
 
             return await _baseHttpClient.PostAsync<ApiResponse<OrderResult, object>?>(uri, jsonPayload, _settings.APIKey, timestamp, signature, _settings.RecvWindow);
         }
@@ -937,9 +937,8 @@ namespace BybitPerpetualsTradingBot
                     {nameof(symbol), symbol.ToUpper()}
                 };
 
-            string timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
             string jsonPayload = JsonConvert.SerializeObject(parameters, _jsonSerializerSettings);
-            string signature = GenerateSignature(_settings, timestamp, jsonPayload);
+            (string timestamp, string signature) = GenerateSignature(_settings, jsonPayload);
 
             return await _baseHttpClient.PostAsync<ApiResponse<CancelAllOrdersResult, object>?>(uri, jsonPayload, _settings.APIKey, timestamp, signature, _settings.RecvWindow);
         }
@@ -961,13 +960,14 @@ namespace BybitPerpetualsTradingBot
         /// <summary>
         /// Generates signature with data
         /// </summary>
-        private static string GenerateSignature(Settings settings, string timestamp, string data)
+        private static (string Timestamp, string Signature) GenerateSignature(Settings settings, string data)
         {
+            string timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
             string rawData = string.Concat(timestamp, settings.APIKey, settings.RecvWindow, data);
             using HMACSHA256 hmac = new(Encoding.UTF8.GetBytes(settings.APISecret));
             byte[] signature = hmac.ComputeHash(Encoding.UTF8.GetBytes(rawData));
 
-            return Convert.ToHexStringLower(signature);
+            return (timestamp, Convert.ToHexStringLower(signature));
         }
 
         /// <summary>
@@ -995,14 +995,15 @@ namespace BybitPerpetualsTradingBot
         private static void LogAndPrint(LogLevel logLevel, string errorMessage, params object?[] parameters)
         {
             string formattedMessage = string.Format(errorMessage, parameters);
-            _logger.Log(logLevel, formattedMessage);
+
+            _logger?.Log(logLevel, formattedMessage);
 
             Console.ForegroundColor = logLevel switch
             {
                 LogLevel.Critical => ConsoleColor.DarkMagenta,
                 LogLevel.Error => ConsoleColor.DarkRed,
                 LogLevel.Warning => ConsoleColor.DarkYellow,
-                LogLevel.Information => ConsoleColor.DarkBlue,
+                LogLevel.Information => ConsoleColor.DarkCyan,
                 LogLevel.Debug => ConsoleColor.DarkGreen,
                 LogLevel.Trace => ConsoleColor.DarkGray,
                 _ => ConsoleColor.White

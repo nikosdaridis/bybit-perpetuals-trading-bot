@@ -8,7 +8,6 @@ namespace BybitPerpetualsTradingBot
     internal sealed class TradingBot(ILogger<TradingBot> logger)
     {
         private readonly ILogger<TradingBot> _logger = logger;
-        private readonly SemaphoreSlim semaphoreSlim = new(1, 1);
         private readonly TradingBotState _state = new();
 
         static async Task Main()
@@ -26,8 +25,6 @@ namespace BybitPerpetualsTradingBot
             {
                 try
                 {
-                    await tradingBot.semaphoreSlim.WaitAsync();
-
                     if (!tradingBot._state.InitializedActiveTradingPairs)
                     {
                         tradingBot._state.InitializedActiveTradingPairs = await TradingBotHelper.InitializeActiveTradingPairs();
@@ -36,8 +33,8 @@ namespace BybitPerpetualsTradingBot
 
                     await TradingBotHelper.ExecuteTasksConcurrently(
                     [
-                        TradingBotHelper.PlaceInitialPositions,
-                        TradingBotHelper.PlaceTakeProfitOrders,
+                        TradingBotHelper.PlaceInitialPosition,
+                        TradingBotHelper.PlaceOrAmendTakeProfitOrder,
                         TradingBotHelper.PlaceScalingOrders
                     ]);
                 }
@@ -45,10 +42,6 @@ namespace BybitPerpetualsTradingBot
                 {
                     tradingBot._logger.LogError(ex, "Error occurred in trading loop");
                     Console.WriteLine($"Error occurred in trading loop: {ex.Message}");
-                }
-                finally
-                {
-                    tradingBot.semaphoreSlim.Release();
                 }
             }
         }

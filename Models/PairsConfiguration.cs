@@ -10,12 +10,14 @@
                 "BTCUSDT", new ()
                 {
                     Side = "Buy",
-                    Leverage = 20m,
-                    InitialMargin = 2m,
-                    TakeProfitPercentage = 10m,
+                    Leverage = 20,
+                    InitialMargin = 5,
+                    InitialOrderTickSize = 2,
+                    InitialOrderTickSizeThreshold = 5,
+                    TakeProfitPercentage = 50,
                     NumberOfScalingLevels = 15,
-                    InitialScalingUnrealizedPnL = 100m,
-                    MaxScalingUnrealizedPnL = 1500m,
+                    InitialScalingUnrealizedPnL = 100,
+                    MaxScalingUnrealizedPnL = 2000,
                     ScalingUnrealisedPnlMultiplier = 1.3m,
                     ScalingQuantityMultiplier = 1.2m
                 }
@@ -24,12 +26,14 @@
                 "ETHUSDT", new ()
                 {
                     Side = "Buy",
-                    Leverage = 20m,
-                    InitialMargin = 2m,
-                    TakeProfitPercentage = 10m,
+                    Leverage = 20,
+                    InitialMargin = 5,
+                    InitialOrderTickSize = 2,
+                    InitialOrderTickSizeThreshold = 5,
+                    TakeProfitPercentage = 50,
                     NumberOfScalingLevels = 15,
-                    InitialScalingUnrealizedPnL = 100m,
-                    MaxScalingUnrealizedPnL = 1500m,
+                    InitialScalingUnrealizedPnL = 100,
+                    MaxScalingUnrealizedPnL = 2000,
                     ScalingUnrealisedPnlMultiplier = 1.3m,
                     ScalingQuantityMultiplier = 1.2m
                 }
@@ -41,8 +45,10 @@
             public string? Side { get; set; }
             public decimal? Leverage { get; set; }
             public decimal? InitialMargin { get; set; }
+            public ushort? InitialOrderTickSize { get; set; }
+            public ushort? InitialOrderTickSizeThreshold { get; set; }
             public decimal? TakeProfitPercentage { get; set; }
-            public int? NumberOfScalingLevels { get; set; }
+            public ushort? NumberOfScalingLevels { get; set; }
             public decimal? InitialScalingUnrealizedPnL { get; set; }
             public decimal? MaxScalingUnrealizedPnL { get; set; }
             public decimal? ScalingUnrealisedPnlMultiplier { get; set; }

@@ -13,7 +13,7 @@ namespace BybitPerpetualsTradingBot
         private readonly Settings _settings;
         private static uint _requestCount = 0;
         private readonly Timer? _timer;
-        private static readonly Lock _lock = new();
+        private static readonly Lock _consoleLock = new();
 
         public BaseHttpClient(HttpClient httpClient, ILogger<BaseHttpClient> logger)
         {
@@ -57,7 +57,7 @@ namespace BybitPerpetualsTradingBot
         {
             await _rateLimiter.WaitAsync();
 
-            lock (_lock)
+            lock (_consoleLock)
                 Interlocked.Increment(ref _requestCount);
 
             using HttpResponseMessage response = await _httpClient.SendAsync(request);
@@ -107,7 +107,7 @@ namespace BybitPerpetualsTradingBot
         /// </summary>
         private void PrintRequestsPerSecond(object? state)
         {
-            lock (_lock)
+            lock (_consoleLock)
             {
                 Console.ForegroundColor = ConsoleColor.DarkGray;
                 Console.WriteLine($"HTTP/sec: {_requestCount}");
