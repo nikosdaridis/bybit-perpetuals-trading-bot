@@ -34,9 +34,12 @@ namespace BybitPerpetualsTradingBot
                         continue;
                     }
 
-                    await TradingBotHelper.PlaceInitialPositions();
-                    await TradingBotHelper.PlaceTakeProfitOrders();
-                    await TradingBotHelper.PlaceScalingOrders();
+                    await TradingBotHelper.ExecuteTasksConcurrently(
+                    [
+                        TradingBotHelper.PlaceInitialPositions,
+                        TradingBotHelper.PlaceTakeProfitOrders,
+                        TradingBotHelper.PlaceScalingOrders
+                    ]);
                 }
                 catch (Exception ex)
                 {

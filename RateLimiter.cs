@@ -4,6 +4,7 @@
     {
         private readonly SemaphoreSlim _semaphoreSlim;
         private readonly ushort _limit;
+        private readonly Timer _timer;
 
         /// <summary>
         /// Rate limits requests per given period
@@ -12,7 +13,7 @@
         {
             _limit = limit;
             _semaphoreSlim = new SemaphoreSlim(limit, limit);
-            _ = new Timer(ReleaseTokens, null, releasePeriod, releasePeriod);
+            _timer = new Timer(ReleaseTokens, null, releasePeriod, releasePeriod);
         }
 
         /// <summary>

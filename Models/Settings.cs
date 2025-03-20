@@ -6,9 +6,10 @@ namespace BybitPerpetualsTradingBot.Models
     {
         public string APIKey { get; set; } = string.Empty;
         public string APISecret { get; set; } = string.Empty;
-        public ushort APIRateLimit { get; set; } = 10;
+        public ushort APIRateLimit { get; set; } = 50;
         public string Endpoint { get; set; } = "https://api.bybit.com/v5/{product}/{module}";
         public string RecvWindow { get; set; } = "20000";
+        public ushort RunningTasks { get; set; } = 10;
         public SerilogConfig Logs { get; set; } = new();
 
         internal sealed class SerilogConfig

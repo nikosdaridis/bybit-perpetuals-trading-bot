@@ -12,6 +12,8 @@ namespace BybitPerpetualsTradingBot
         private readonly RateLimiter _rateLimiter;
         private readonly Settings _settings;
         private static uint _requestCount = 0;
+        private readonly Timer? _timer;
+        private static readonly Lock _lock = new();
 
         public BaseHttpClient(HttpClient httpClient, ILogger<BaseHttpClient> logger)
         {
@@ -20,7 +22,7 @@ namespace BybitPerpetualsTradingBot
 
             _settings = TradingBotHelper.LoadFileData<Settings>(TradingBotHelper.settingsFilePath);
             _rateLimiter = new(_settings.APIRateLimit, TimeSpan.FromSeconds(1));
-            _ = new Timer(PrintRequestsPerSecond, null, TimeSpan.Zero, TimeSpan.FromSeconds(1));
+            _timer = new Timer(PrintRequestsPerSecond, null, TimeSpan.Zero, TimeSpan.FromSeconds(1));
         }
 
         /// <summary>
@@ -54,7 +56,9 @@ namespace BybitPerpetualsTradingBot
         protected async Task<TResponse?> SendAsync<TResponse>(HttpRequestMessage request)
         {
             await _rateLimiter.WaitAsync();
-            Interlocked.Increment(ref _requestCount);
+
+            lock (_lock)
+                Interlocked.Increment(ref _requestCount);
 
             using HttpResponseMessage response = await _httpClient.SendAsync(request);
 
@@ -103,8 +107,12 @@ namespace BybitPerpetualsTradingBot
         /// </summary>
         private void PrintRequestsPerSecond(object? state)
         {
-            Console.WriteLine($"HTTP requests per second: {_requestCount}");
-            Interlocked.Exchange(ref _requestCount, 0);
+            lock (_lock)
+            {
+                Console.ForegroundColor = ConsoleColor.DarkGray;
+                Console.WriteLine($"HTTP/sec: {_requestCount}");
+                Interlocked.Exchange(ref _requestCount, 0);
+            }
         }
     }
 }
