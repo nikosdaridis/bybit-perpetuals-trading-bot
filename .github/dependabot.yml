@@ -1,0 +1,20 @@
+version: 2
+updates:
+  # Configuration for NuGet
+  - package-ecosystem: "nuget"
+    directory: "/ConfiguratorSite"
+    schedule:
+      interval: "daily"
+    labels:
+      - "dependencies"
+      - ".NET"
+      - "automerge"
+      
+  - package-ecosystem: "nuget"
+    directory: "/TradingBot"
+    schedule:
+      interval: "daily"
+    labels:
+      - "dependencies"
+      - ".NET"
+      - "automerge"
