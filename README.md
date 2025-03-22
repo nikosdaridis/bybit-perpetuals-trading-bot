@@ -5,8 +5,7 @@
 <p align="center">
 DISCLAIMER
 
-This software is for educational purposes only and is intended for use with a DEMO account only.
-DO NOT use this software with a real trading account or real funds. Doing so will result in significant financial loss.
+This software is for educational purposes only. DO NOT use this software with a real trading account or real funds. Doing so will result in significant financial loss.
 
 By using this software, you acknowledge and agree that:
 

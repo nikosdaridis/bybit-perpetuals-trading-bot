@@ -12,11 +12,12 @@
                     Side = "Buy",
                     Leverage = 20,
                     InitialMargin = 5,
-                    InitialOrderTickSize = 2,
-                    InitialOrderTickSizeThreshold = 5,
+                    InitialPriceTickSizeOffset = 2,
+                    InitialPriceTickSizeThreshold = 5,
                     TakeProfitPercentage = 50,
                     NumberOfScalingLevels = 15,
                     InitialScalingUnrealizedPnL = 100,
+                    InitialScalingQuantityMultiplier = 0.5m,
                     MaxScalingUnrealizedPnL = 2000,
                     ScalingUnrealisedPnlMultiplier = 1.3m,
                     ScalingQuantityMultiplier = 1.2m
@@ -28,11 +29,12 @@
                     Side = "Buy",
                     Leverage = 20,
                     InitialMargin = 5,
-                    InitialOrderTickSize = 2,
-                    InitialOrderTickSizeThreshold = 5,
+                    InitialPriceTickSizeOffset = 2,
+                    InitialPriceTickSizeThreshold = 5,
                     TakeProfitPercentage = 50,
                     NumberOfScalingLevels = 15,
                     InitialScalingUnrealizedPnL = 100,
+                    InitialScalingQuantityMultiplier = 0.5m,
                     MaxScalingUnrealizedPnL = 2000,
                     ScalingUnrealisedPnlMultiplier = 1.3m,
                     ScalingQuantityMultiplier = 1.2m
@@ -45,11 +47,12 @@
             public string? Side { get; set; }
             public decimal? Leverage { get; set; }
             public decimal? InitialMargin { get; set; }
-            public ushort? InitialOrderTickSize { get; set; }
-            public ushort? InitialOrderTickSizeThreshold { get; set; }
+            public ushort? InitialPriceTickSizeOffset { get; set; }
+            public ushort? InitialPriceTickSizeThreshold { get; set; }
             public decimal? TakeProfitPercentage { get; set; }
             public ushort? NumberOfScalingLevels { get; set; }
             public decimal? InitialScalingUnrealizedPnL { get; set; }
+            public decimal? InitialScalingQuantityMultiplier { get; set; }
             public decimal? MaxScalingUnrealizedPnL { get; set; }
             public decimal? ScalingUnrealisedPnlMultiplier { get; set; }
             public decimal? ScalingQuantityMultiplier { get; set; }

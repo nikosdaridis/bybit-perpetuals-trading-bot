@@ -233,18 +233,18 @@ namespace BybitPerpetualsTradingBot
                     return false;
                 }
 
-                //Check if initial order tick size is not negative
-                if (pairConfiguration.InitialOrderTickSize is null || pairConfiguration.InitialOrderTickSize < 0)
+                //Check if initial price tick size offset is not negative
+                if (pairConfiguration.InitialPriceTickSizeOffset is null || pairConfiguration.InitialPriceTickSizeOffset < 0)
                 {
-                    LogAndPrint(LogLevel.Error, "Active trading pair {0} initial order tick size {1} is invalid", pair, pairConfiguration.InitialOrderTickSize);
+                    LogAndPrint(LogLevel.Error, "Active trading pair {0} initial price tick size offset {1} is invalid", pair, pairConfiguration.InitialPriceTickSizeOffset);
                     return false;
                 }
 
-                //Check if initial order tick size threshold is more than 0 and more than initial order tick size
-                if (pairConfiguration.InitialOrderTickSizeThreshold is null || pairConfiguration.InitialOrderTickSizeThreshold <= 0 ||
-                    pairConfiguration.InitialOrderTickSizeThreshold <= pairConfiguration.InitialOrderTickSize)
+                //Check if initial price tick size threshold is more than 0 and more than initial order tick size
+                if (pairConfiguration.InitialPriceTickSizeThreshold is null || pairConfiguration.InitialPriceTickSizeThreshold <= 0 ||
+                    pairConfiguration.InitialPriceTickSizeThreshold <= pairConfiguration.InitialPriceTickSizeOffset)
                 {
-                    LogAndPrint(LogLevel.Error, "Active trading pair {0} initial order tick size threshold {1} is invalid", pair, pairConfiguration.InitialOrderTickSizeThreshold);
+                    LogAndPrint(LogLevel.Error, "Active trading pair {0} initial price tick size threshold {1} is invalid", pair, pairConfiguration.InitialPriceTickSizeThreshold);
                     return false;
                 }
 
@@ -266,6 +266,13 @@ namespace BybitPerpetualsTradingBot
                 if (pairConfiguration.InitialScalingUnrealizedPnL is null || pairConfiguration.InitialScalingUnrealizedPnL <= 0)
                 {
                     LogAndPrint(LogLevel.Error, "Active trading pair {0} initial step unrealised PnL percentage {1} is invalid", pair, pairConfiguration.InitialScalingUnrealizedPnL);
+                    return false;
+                }
+
+                // Check if initial step quantity multiplier is more than 0
+                if (pairConfiguration.InitialScalingQuantityMultiplier is null || pairConfiguration.InitialScalingQuantityMultiplier <= 0)
+                {
+                    LogAndPrint(LogLevel.Error, "Active trading pair {0} initial step quantity multiplier {1} is invalid", pair, pairConfiguration.InitialScalingQuantityMultiplier);
                     return false;
                 }
 
@@ -312,6 +319,9 @@ namespace BybitPerpetualsTradingBot
                     return false;
                 }
             }
+
+            Console.ForegroundColor = ConsoleColor.DarkGreen;
+            Console.WriteLine("Active trading pairs initialized successfully");
 
             return true;
         }
@@ -361,7 +371,7 @@ namespace BybitPerpetualsTradingBot
                     TryParseDecimal(responseTickers.Result?.List?.FirstOrDefault()?.LastPrice, out decimal lastPrice) &&
                     TryParseDecimal(_instrumentsInfo[Symbol].PriceFilter?.TickSize, out decimal tickSize))
                 {
-                    return Math.Abs(orderPrice - lastPrice) < tickSize * ActiveTradingPair.Configuration.InitialOrderTickSizeThreshold;
+                    return Math.Abs(orderPrice - lastPrice) < tickSize * ActiveTradingPair.Configuration.InitialPriceTickSizeThreshold;
                 }
 
                 return false;
@@ -397,8 +407,8 @@ namespace BybitPerpetualsTradingBot
             decimal orderPrice;
             (string? priceString, int priceModifier) = ActiveTradingPair.Configuration.Side switch
             {
-                Side.Buy => (responseTickers.Result?.List?.FirstOrDefault()?.Bid1Price, -(ActiveTradingPair.Configuration.InitialOrderTickSize ?? 2)),
-                Side.Sell => (responseTickers.Result?.List?.FirstOrDefault()?.Ask1Price, ActiveTradingPair.Configuration.InitialOrderTickSize ?? 2),
+                Side.Buy => (responseTickers.Result?.List?.FirstOrDefault()?.Bid1Price, -(ActiveTradingPair.Configuration.InitialPriceTickSizeOffset ?? 2)),
+                Side.Sell => (responseTickers.Result?.List?.FirstOrDefault()?.Ask1Price, ActiveTradingPair.Configuration.InitialPriceTickSizeOffset ?? 2),
                 _ => throw new InvalidOperationException($"Unsupported trading side: {ActiveTradingPair.Configuration.Side}")
             };
 
@@ -739,7 +749,7 @@ namespace BybitPerpetualsTradingBot
             }
 
             decimal pnlFactor = 1m;
-            decimal levelQty = currentQty / 2;
+            decimal levelQty = currentQty * activeTradingPair.Configuration.InitialScalingQuantityMultiplier ?? 1;
 
             for (int i = 0; i < activeTradingPair.Configuration.NumberOfScalingLevels; i++)
             {

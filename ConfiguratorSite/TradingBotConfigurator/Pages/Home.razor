@@ -1,0 +1,32 @@
+﻿@page "/"
+
+@inject BaseHttpClient httpClient
+
+<PageTitle>@selectedPair Configurator - Bybit Perpetuals Trading Bot</PageTitle>
+
+@if (instrumentInfo.Count <= 0)
+    return;
+
+<RadzenAutoComplete @bind-Value=selectedPair Data=@instrumentInfo.Values TextProperty=@(nameof(InstrumentList.Symbol))
+                    MinLength=1 Style="width: 20rem" Placeholder="Search pairs"
+                    FilterOperator=StringFilterOperator.Contains FilterCaseSensitivity=FilterCaseSensitivity.CaseInsensitive>
+
+</RadzenAutoComplete>
+
+@selectedPair
+
+@code {
+    private Dictionary<string, InstrumentList> instrumentInfo = [];
+    private string selectedPair = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+
+        ApiResponse<GetInstrumentsInfoResult, object?>? responseInstrumentsInfo = await httpClient.GetAsync<ApiResponse<GetInstrumentsInfoResult, object?>>(
+            "https://api.bybit.com//v5/market/instruments-info?category=linear&limit=1000");
+
+        if (responseInstrumentsInfo is not null && responseInstrumentsInfo?.Result?.List?.Count > 0)
+            instrumentInfo = responseInstrumentsInfo?.Result?.List?.ToDictionary(x => x.Symbol ?? string.Empty, x => x) ?? [];
+    }
+}
