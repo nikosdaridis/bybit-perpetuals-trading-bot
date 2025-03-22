@@ -1,32 +1,173 @@
-﻿@page "/"
+﻿@page "/{SelectedPair?}"
 
 @inject BaseHttpClient httpClient
+@inject NavigationManager Navigation
 
-<PageTitle>@selectedPair Configurator - Bybit Perpetuals Trading Bot</PageTitle>
+<PageTitle>@_selectedPair Configurator - Bybit Perpetuals Trading Bot</PageTitle>
 
-@if (instrumentInfo.Count <= 0)
+@if (pairsInfo.Count <= 0)
+{
+    <div class="container">
+        <div class="header">
+            <h3>Fetching data from Bybit API</h3>
+        </div>
+    </div>
     return;
+}
 
-<RadzenAutoComplete @bind-Value=selectedPair Data=@instrumentInfo.Values TextProperty=@(nameof(InstrumentList.Symbol))
-                    MinLength=1 Style="width: 20rem" Placeholder="Search pairs"
-                    FilterOperator=StringFilterOperator.Contains FilterCaseSensitivity=FilterCaseSensitivity.CaseInsensitive>
+<h4 style="text-align: center">Under Development</h4>
 
-</RadzenAutoComplete>
+<div class="container">
+    <div class="header">
+        <RadzenAutoComplete @bind-Value=_selectedPair @bind-Value:after=OnSelectedPairChange Data=pairsInfo.Values TextProperty=@(nameof(InstrumentList.Symbol))
+                            MinLength=1 Style="width: 25rem" Placeholder="Search pair to configure"
+                            FilterOperator=StringFilterOperator.Contains FilterCaseSensitivity=FilterCaseSensitivity.CaseInsensitive>
+        </RadzenAutoComplete>
+    </div>
 
-@selectedPair
+    @if (!string.IsNullOrEmpty(_selectedPair) && pairsInfo.ContainsKey(_selectedPair) && _tickers is not null)
+    {
+        <div class="info-row">
+            <h4>Last Price: @_tickers.LastPrice</h4>
+            <h4>Min Quantity: @pairsInfo[_selectedPair]?.LotSizeFilter?.MinOrderQty</h4>
+            <h4>Quantity Step: @pairsInfo[_selectedPair]?.LotSizeFilter?.QtyStep</h4>
+            <h4>Min Notional Value: @pairsInfo[_selectedPair]?.LotSizeFilter?.MinNotionalValue</h4>
+        </div>
+
+        <div class="form-container">
+            <div class="input-row">
+                <div class="input-group">
+                    <label for="side">Side</label>
+                    <select id="side" class="input-field" @bind=_configuration.Side @bind:after=OnInputChange>
+                        <option value="Buy">Buy</option>
+                        <option value="Sell">Sell</option>
+                    </select>
+                </div>
+
+                <div class="input-group">
+                    <label for="leverage">
+                        Leverage @($"({pairsInfo[_selectedPair]?.LeverageFilter?.MinLeverage?.TrimEnd('0').TrimEnd('.')} - {pairsInfo[_selectedPair]?.LeverageFilter?.MaxLeverage?.TrimEnd('0').TrimEnd('.')})"):
+                    </label>
+                    <input id="leverage" type="number" @bind=_configuration.Leverage @bind:after=OnInputChange
+                           min=@pairsInfo[_selectedPair]?.LeverageFilter?.MinLeverage
+                           max=@pairsInfo[_selectedPair]?.LeverageFilter?.MaxLeverage
+                           step=@pairsInfo[_selectedPair]?.LeverageFilter?.LeverageStep />
+                </div>
+
+                <div class="input-group">
+                    <label for="initial-margin">Initial Margin:</label>
+                    <input id="initial-margin" type="number" @bind=_configuration.InitialMargin @bind:after=OnInputChange
+                           min=0 max=100000 step=0.01 />
+                </div>
+
+                <div class="input-group">
+                    <label for="initial-price-tick-size-offset">Initial Price Tick Size Offset:</label>
+                    <input id="initial-price-tick-size-offset" type="number" @bind=_configuration.InitialPriceTickSizeOffset @bind:after=OnInputChange
+                           min=0 max=10000 step=1 />
+                </div>
+
+                <div class="input-group">
+                    <label for="initial-price-tick-size-threshold">Initial Price Tick Size Threshold:</label>
+                    <input id="initial-price-tick-size-threshold" type="number" @bind=_configuration.InitialPriceTickSizeThreshold @bind:after=OnInputChange
+                           min=0 max=10000 step=1 />
+                </div>
+
+                <div class="input-group">
+                    <label for="take-profit-percentage">Take Profit Percentage:</label>
+                    <input id="take-profit-percentage" type="number" @bind=_configuration.TakeProfitPercentage @bind:after=OnInputChange
+                           min=1 max=10000 step=0.01 />
+                </div>
+
+                <div class="input-group">
+                    <label for="number-of-scaling-levels">Number Of Scaling Levels:</label>
+                    <input id="number-of-scaling-levels" type="number" @bind=_configuration.NumberOfScalingLevels @bind:after=OnInputChange
+                           min=0 max=1000 step=1 />
+                </div>
+
+                <div class="input-group">
+                    <label for="initial-scaling-unrealized-pnl">Initial Scaling Unrealized PnL:</label>
+                    <input id="initial-scaling-unrealized-pnl" type="number" @bind=_configuration.InitialScalingUnrealizedPnL @bind:after=OnInputChange
+                           min=1 max=10000 step=0.01 />
+                </div>
+
+                <div class="input-group">
+                    <label for="initial-scaling-quantity-multiplier">Initial Scaling Quantity Multiplier:</label>
+                    <input id="initial-scaling-quantity-multiplier" type="number" @bind=_configuration.InitialScalingQuantityMultiplier @bind:after=OnInputChange
+                           min=0 max=1000 step=0.001 />
+                </div>
+
+                <div class="input-group">
+                    <label for="max-scaling-unrealized-pnl">Max Scaling Unrealized PnL:</label>
+                    <input id="max-scaling-unrealized-pnl" type="number" @bind=_configuration.MaxScalingUnrealizedPnL @bind:after=OnInputChange
+                           min=1 max=10000 step=0.01 />
+                </div>
+
+                <div class="input-group">
+                    <label for="scaling-unrealised-pnl-multiplier">Scaling Unrealised Pnl Multiplier:</label>
+                    <input id="scaling-unrealised-pnl-multiplier" type="number" @bind=_configuration.ScalingUnrealisedPnlMultiplier @bind:after=OnInputChange
+                           min=0 max=1000 step=0.001 />
+                </div>
+
+                <div class="input-group">
+                    <label for="scaling-quantity-multiplier">Scaling Quantity Multiplier:</label>
+                    <input id="scaling-quantity-multiplier" type="number" @bind=_configuration.ScalingQuantityMultiplier @bind:after=OnInputChange
+                           min=0 max=1000 step=0.001 />
+                </div>
+            </div>
+        </div>
+    }
+</div>
 
 @code {
-    private Dictionary<string, InstrumentList> instrumentInfo = [];
-    private string selectedPair = string.Empty;
+    [Parameter]
+    public string? SelectedPair { get; set; }
+
+    private Dictionary<string, InstrumentList> pairsInfo = [];
+    private string _selectedPair = string.Empty;
+    private TickersList? _tickers;
+    private Configuration _configuration = new("Buy", 20, 5, 2, 5, 50, 15, 100, 0.5m, 2000, 1.3m, 1.2m);
 
     protected override async Task OnInitializedAsync()
     {
         await base.OnInitializedAsync();
 
+        if (!string.IsNullOrEmpty(SelectedPair))
+        {
+            _selectedPair = SelectedPair.ToUpper();
+            await OnSelectedPairChange();
+        }
+
         ApiResponse<GetInstrumentsInfoResult, object?>? responseInstrumentsInfo = await httpClient.GetAsync<ApiResponse<GetInstrumentsInfoResult, object?>>(
-            "https://api.bybit.com//v5/market/instruments-info?category=linear&limit=1000");
+            "https://api.bybit.com/v5/market/instruments-info?category=linear&limit=1000");
 
         if (responseInstrumentsInfo is not null && responseInstrumentsInfo?.Result?.List?.Count > 0)
-            instrumentInfo = responseInstrumentsInfo?.Result?.List?.ToDictionary(x => x.Symbol ?? string.Empty, x => x) ?? [];
+            pairsInfo = responseInstrumentsInfo?.Result?.List?.ToDictionary(x => x.Symbol ?? string.Empty, x => x) ?? [];
+    }
+
+    private async Task OnSelectedPairChange()
+    {
+        if (!string.IsNullOrEmpty(_selectedPair))
+            Navigation.NavigateTo($"{_selectedPair}", false);
+
+        _tickers = null;
+
+        if (string.IsNullOrEmpty(_selectedPair))
+            return;
+
+        ApiResponse<GetTickersResult, object?>? responseTickers = await httpClient.GetAsync<ApiResponse<GetTickersResult, object?>>(
+            $"https://api.bybit.com/v5/market/tickers?category=linear&symbol={_selectedPair}");
+
+        if (responseTickers?.RetCode != 0)
+            return;
+
+        if (responseTickers?.Result?.List?.First() is not null)
+            _tickers = responseTickers.Result.List.First();
+
+        OnInputChange();
+    }
+
+    private void OnInputChange()
+    {
+        Console.WriteLine("value changed");
     }
 }

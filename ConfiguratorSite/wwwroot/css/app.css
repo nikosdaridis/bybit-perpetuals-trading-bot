@@ -53,3 +53,130 @@ code {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
 }
+
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Poppins', sans-serif;
+}
+
+body {
+    color: #e0e0e0;
+}
+
+.container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 10px;
+    background-color: #1e1e1e;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+}
+
+.header {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.title {
+    font-size: 3rem;
+    font-weight: 800;
+    text-align: center;
+    margin-top: 0;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+}
+
+.form-container {
+    margin-bottom: 20px;
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.input-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2rem;
+    row-gap: 0.8rem;
+}
+
+.input-group {
+    display: flex;
+    flex-direction: column;
+}
+
+    .input-group label,
+    .input-field label {
+        font-size: 1rem;
+        color: #ccc;
+        margin-bottom: 5px;
+    }
+
+    .input-group input,
+    .input-field {
+        padding: 6px;
+        font-size: 1rem;
+        border: 1px solid #444;
+        border-radius: 5px;
+        outline: none;
+        background-color: #333;
+        color: #fff;
+        transition: border 0.3s;
+        width: 100%;
+    }
+
+        .input-group input:focus,
+        .input-field:focus {
+            border: 1px solid #007bff;
+        }
+
+.results-container {
+    margin-top: 1.5rem;
+}
+
+.scaling-levels {
+    list-style-type: none;
+    padding: 0;
+}
+
+.scaling-level {
+    background-color: #333;
+    padding: 6px;
+    margin-bottom: 2px;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+    .scaling-level:nth-child(odd) {
+        background-color: #2c2c2c;
+    }
+
+    .scaling-level:nth-child(even) {
+        background-color: #3a3a3a;
+    }
+
+.scaling-level-text {
+    font-size: 1rem;
+    color: #ccc;
+    line-height: 1.5;
+}
+
+    .scaling-level-text b {
+        font-weight: 800;
+        color: #ebebeb;
+    }
+
+        .scaling-level-text b.highlight {
+            font-weight: 900;
+            font-size: 1.1rem;
+            color: #00eeff;
+        }
