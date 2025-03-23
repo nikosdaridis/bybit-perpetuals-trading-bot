@@ -255,45 +255,45 @@ namespace BybitPerpetualsTradingBot
                     return false;
                 }
 
-                //Check if number of scaling levels is not negative
-                if (pairConfiguration.NumberOfScalingLevels is null || pairConfiguration.NumberOfScalingLevels < 0)
+                //Check if number of scaling levels is min 0 and max 99
+                if (pairConfiguration.NumberOfScalingLevels is null || pairConfiguration.NumberOfScalingLevels < 0 || pairConfiguration.NumberOfScalingLevels > 99)
                 {
                     LogAndPrint(LogLevel.Error, "Active trading pair {0} number of scaling levels {1} is invalid", pair, pairConfiguration.NumberOfScalingLevels);
                     return false;
                 }
 
-                // Check if initial step unrealised PnL percentage is more than 0
+                // Check if initial scaling unrealised PnL percentage is more than 0
                 if (pairConfiguration.InitialScalingUnrealizedPnL is null || pairConfiguration.InitialScalingUnrealizedPnL <= 0)
                 {
-                    LogAndPrint(LogLevel.Error, "Active trading pair {0} initial step unrealised PnL percentage {1} is invalid", pair, pairConfiguration.InitialScalingUnrealizedPnL);
+                    LogAndPrint(LogLevel.Error, "Active trading pair {0} initial scaling unrealised PnL percentage {1} is invalid", pair, pairConfiguration.InitialScalingUnrealizedPnL);
                     return false;
                 }
 
-                // Check if initial step quantity multiplier is more than 0
+                // Check if initial scaling quantity multiplier is more than 0
                 if (pairConfiguration.InitialScalingQuantityMultiplier is null || pairConfiguration.InitialScalingQuantityMultiplier <= 0)
                 {
-                    LogAndPrint(LogLevel.Error, "Active trading pair {0} initial step quantity multiplier {1} is invalid", pair, pairConfiguration.InitialScalingQuantityMultiplier);
+                    LogAndPrint(LogLevel.Error, "Active trading pair {0} initial scaling quantity multiplier {1} is invalid", pair, pairConfiguration.InitialScalingQuantityMultiplier);
                     return false;
                 }
 
-                // Check if max step unrealised PnL percentage is more than initial step unrealised PnL percentage
+                // Check if max scaling unrealised PnL percentage is more than initial scaling unrealised PnL percentage
                 if (pairConfiguration.MaxScalingUnrealizedPnL is null || pairConfiguration.MaxScalingUnrealizedPnL < pairConfiguration.InitialScalingUnrealizedPnL)
                 {
-                    LogAndPrint(LogLevel.Error, "Active trading pair {0} max step unrealised PnL percentage {1} is invalid", pair, pairConfiguration.MaxScalingUnrealizedPnL);
+                    LogAndPrint(LogLevel.Error, "Active trading pair {0} max scaling unrealised PnL percentage {1} is invalid", pair, pairConfiguration.MaxScalingUnrealizedPnL);
                     return false;
                 }
 
-                // Check if step unrealised PnL multiplier is more than 0
+                // Check if scaling unrealised PnL multiplier is more than 0
                 if (pairConfiguration.ScalingUnrealisedPnlMultiplier is null || pairConfiguration.ScalingUnrealisedPnlMultiplier <= 0)
                 {
-                    LogAndPrint(LogLevel.Error, "Active trading pair {0} step unrealised PnL multiplier {1} is invalid", pair, pairConfiguration.ScalingUnrealisedPnlMultiplier);
+                    LogAndPrint(LogLevel.Error, "Active trading pair {0} scaling unrealised PnL multiplier {1} is invalid", pair, pairConfiguration.ScalingUnrealisedPnlMultiplier);
                     return false;
                 }
 
-                // Check if step quantity multiplier is more than 0
+                // Check if scaling quantity multiplier is more than 0
                 if (pairConfiguration.ScalingQuantityMultiplier is null || pairConfiguration.ScalingQuantityMultiplier <= 0)
                 {
-                    LogAndPrint(LogLevel.Error, "Active trading pair {0} step quantity multiplier {1} is invalid", pair, pairConfiguration.ScalingQuantityMultiplier);
+                    LogAndPrint(LogLevel.Error, "Active trading pair {0} scaling quantity multiplier {1} is invalid", pair, pairConfiguration.ScalingQuantityMultiplier);
                     return false;
                 }
 

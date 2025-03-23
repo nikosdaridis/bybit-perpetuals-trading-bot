@@ -11,15 +11,19 @@
 {
     <div class="container">
         <div class="header">
+            <h2>Configurator for <a href="https://github.com/nikosdaridis/bybit-perpetuals-trading-bot" target="_blank">Bybit Perpetuals Trading Bot</a></h2>
+        </div>
+        <div class="header">
             <h3>Fetching data from Bybit API</h3>
         </div>
     </div>
     return;
 }
 
-<h4 style="text-align: center">Under Development</h4>
-
 <div class="container">
+    <div class="header">
+        <h2>Configurator for <a href="https://github.com/nikosdaridis/bybit-perpetuals-trading-bot" target="_blank">Bybit Perpetuals Trading Bot</a></h2>
+    </div>
     <div class="header">
         <RadzenAutoComplete @bind-Value=_selectedPair @bind-Value:after=OnSelectedPairChange Data=_pairsInfo.Values TextProperty=@(nameof(InstrumentList.Symbol))
                             MinLength=1 Style="width: 20rem" Placeholder="Search pair to configure"
@@ -37,12 +41,17 @@
 
     @if (!string.IsNullOrEmpty(_selectedPair) && _pairsInfo.ContainsKey(_selectedPair) && _tickers is not null)
     {
-        <div class="info-row">
-            <h4>Last Price: @_tickers.LastPrice</h4>
-            <h4>Min Quantity: @_pairsInfo[_selectedPair]?.LotSizeFilter?.MinOrderQty</h4>
-            <h4>Quantity Step: @_pairsInfo[_selectedPair]?.LotSizeFilter?.QtyStep</h4>
-            <h4>Min Notional Value: @_pairsInfo[_selectedPair]?.LotSizeFilter?.MinNotionalValue</h4>
-        </div>
+        @if (TryParseDecimal(_tickers.LastPrice, out decimal lastPrice) && TryParseDecimal(_pairsInfo[_selectedPair]?.PriceFilter?.TickSize, out decimal tickSize))
+        {
+            byte decimalPlaces = GetDecimalPlaces(tickSize);
+
+            <div class="info-row">
+                <h4>Last Price: @(lastPrice.ToString($"N{decimalPlaces}"))</h4>
+                <h4>Min Quantity: @_pairsInfo[_selectedPair]?.LotSizeFilter?.MinOrderQty</h4>
+                <h4>Quantity Step: @_pairsInfo[_selectedPair]?.LotSizeFilter?.QtyStep</h4>
+                <h4>Min Notional Value: @_pairsInfo[_selectedPair]?.LotSizeFilter?.MinNotionalValue</h4>
+            </div>
+        }
 
         <div class="form-container">
             <div class="input-row">
@@ -91,7 +100,7 @@
                 <div class="input-group">
                     <label for="number-of-scaling-levels">Number Of Scaling Levels:</label>
                     <input id="number-of-scaling-levels" type="number" @bind=_configuration.NumberOfScalingLevels @bind:after=OnInputChange
-                           min=0 max=1000 step=1 />
+                           min=0 max=99 step=1 />
                 </div>
 
                 <div class="input-group">
@@ -103,7 +112,7 @@
                 <div class="input-group">
                     <label for="initial-scaling-quantity-multiplier">Initial Scaling Quantity Multiplier:</label>
                     <input id="initial-scaling-quantity-multiplier" type="number" @bind=_configuration.InitialScalingQuantityMultiplier @bind:after=OnInputChange
-                           min=0 max=1000 step=0.001 />
+                           min=0 max=1000 step=0.01 />
                 </div>
 
                 <div class="input-group">
@@ -115,25 +124,39 @@
                 <div class="input-group">
                     <label for="scaling-unrealised-pnl-multiplier">Scaling Unrealised Pnl Multiplier:</label>
                     <input id="scaling-unrealised-pnl-multiplier" type="number" @bind=_configuration.ScalingUnrealisedPnlMultiplier @bind:after=OnInputChange
-                           min=0 max=1000 step=0.001 />
+                           min=0 max=1000 step=0.01 />
                 </div>
 
                 <div class="input-group">
                     <label for="scaling-quantity-multiplier">Scaling Quantity Multiplier:</label>
                     <input id="scaling-quantity-multiplier" type="number" @bind=_configuration.ScalingQuantityMultiplier @bind:after=OnInputChange
-                           min=0 max=1000 step=0.001 />
+                           min=0 max=1000 step=0.01 />
                 </div>
             </div>
         </div>
 
-        @if (_errors.Count > 0)
+        @if (_errors?.Count > 0)
         {
             <div class="results-container">
                 <ul class="errors">
-                    @foreach (var error in _errors)
+                    @foreach (string error in _errors)
                     {
                         <li class="error">
                             <p class="error-text">@error</p>
+                        </li>
+                    }
+                </ul>
+            </div>
+        }
+
+        @if (_errors?.Count <= 0 && _scalingLevelsMarkup?.Count > 0)
+        {
+            <div class="results-container">
+                <ul class="scaling-levels">
+                    @foreach (MarkupString scalingLevel in _scalingLevelsMarkup)
+                    {
+                        <li class="scaling-level">
+                            <p class="scaling-level-text">@scalingLevel</p>
                         </li>
                     }
                 </ul>
@@ -149,8 +172,9 @@
     private Dictionary<string, InstrumentList> _pairsInfo = [];
     private string _selectedPair = string.Empty;
     private TickersList? _tickers;
-    private Configuration _configuration = new("Buy", 20, 5, 2, 5, 50, 15, 100, 0.5m, 2000, 1.3m, 1.2m);
+    private Configuration _configuration = new("Buy", 20, 5, 2, 5, 50, 10, 100, 0.5m, 700, 1.3m, 1.2m);
     private HashSet<string> _errors = [];
+    private HashSet<MarkupString> _scalingLevelsMarkup = [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -167,6 +191,8 @@
 
         if (responseInstrumentsInfo is not null && responseInstrumentsInfo?.Result?.List?.Count > 0)
             _pairsInfo = responseInstrumentsInfo?.Result?.List?.ToDictionary(x => x.Symbol ?? string.Empty, x => x) ?? [];
+
+        OnInputChange();
     }
 
     private async Task OnSelectedPairChange()
@@ -193,7 +219,11 @@
 
     private void OnInputChange()
     {
+        if (string.IsNullOrEmpty(_selectedPair) || !_pairsInfo.ContainsKey(_selectedPair))
+            return;
+
         ValidateConfiguration();
+        CalculateScalingLevels();
     }
 
     /// <summary>
@@ -202,9 +232,6 @@
     private void ValidateConfiguration()
     {
         _errors.Clear();
-
-        if (string.IsNullOrEmpty(_selectedPair) || !_pairsInfo.ContainsKey(_selectedPair))
-            return;
 
         // Check if side is Buy or Sell
         if (_configuration.Side is null || (_configuration.Side != "Buy" && _configuration.Side != "Sell"))
@@ -240,29 +267,29 @@
         if (_configuration.TakeProfitPercentage is null || _configuration.TakeProfitPercentage <= 0)
             _errors.Add($"Take profit percentage {_configuration.TakeProfitPercentage} is invalid");
 
-        //Check if number of scaling levels is not negative
-        if (_configuration.NumberOfScalingLevels is null || _configuration.NumberOfScalingLevels < 0)
-            _errors.Add($"Number of scaling levels {_configuration.NumberOfScalingLevels} is invalid");
+        //Check if number of scaling levels is min 0 and max 99
+        if (_configuration.NumberOfScalingLevels is null || _configuration.NumberOfScalingLevels < 0 || _configuration.NumberOfScalingLevels > 99)
+            _errors.Add($"Number of scaling levels {_configuration.NumberOfScalingLevels} is invalid, min 0 and max 99");
 
-        // Check if initial step unrealised PnL percentage is more than 0
+        // Check if initial scaling unrealised PnL percentage is more than 0
         if (_configuration.InitialScalingUnrealizedPnL is null || _configuration.InitialScalingUnrealizedPnL <= 0)
-            _errors.Add($"Initial step unrealised PnL percentage {_configuration.InitialScalingUnrealizedPnL} is invalid");
+            _errors.Add($"Initial scaling unrealised PnL percentage {_configuration.InitialScalingUnrealizedPnL} is invalid");
 
-        // Check if initial step quantity multiplier is more than 0
+        // Check if initial scaling quantity multiplier is more than 0
         if (_configuration.InitialScalingQuantityMultiplier is null || _configuration.InitialScalingQuantityMultiplier <= 0)
-            _errors.Add($"Initial step quantity multiplier {_configuration.InitialScalingQuantityMultiplier} is invalid");
+            _errors.Add($"Initial scaling quantity multiplier {_configuration.InitialScalingQuantityMultiplier} is invalid");
 
-        // Check if max step unrealised PnL percentage is more than initial step unrealised PnL percentage
+        // Check if max scaling unrealised PnL percentage is more than initial step unrealised PnL percentage
         if (_configuration.MaxScalingUnrealizedPnL is null || _configuration.MaxScalingUnrealizedPnL < _configuration.InitialScalingUnrealizedPnL)
-            _errors.Add($"Max step unrealised PnL percentage {_configuration.MaxScalingUnrealizedPnL} is invalid, should be more than initial step unrealised PnL percentage {_configuration.InitialScalingUnrealizedPnL}");
+            _errors.Add($"Max scaling unrealised PnL percentage {_configuration.MaxScalingUnrealizedPnL} is invalid, should be more than initial scaling unrealised PnL percentage {_configuration.InitialScalingUnrealizedPnL}");
 
-        // Check if step unrealised PnL multiplier is more than 0
+        // Check if scaling unrealised PnL multiplier is more than 0
         if (_configuration.ScalingUnrealisedPnlMultiplier is null || _configuration.ScalingUnrealisedPnlMultiplier <= 0)
-            _errors.Add($"Step unrealised PnL multiplier {_configuration.ScalingUnrealisedPnlMultiplier} is invalid");
+            _errors.Add($"Scaling unrealised PnL multiplier {_configuration.ScalingUnrealisedPnlMultiplier} is invalid");
 
-        // Check if step quantity multiplier is more than 0
+        // Check if scaling quantity multiplier is more than 0
         if (_configuration.ScalingQuantityMultiplier is null || _configuration.ScalingQuantityMultiplier <= 0)
-            _errors.Add($"Step quantity multiplier {_configuration.ScalingQuantityMultiplier} is invalid");
+            _errors.Add($"Scaling quantity multiplier {_configuration.ScalingQuantityMultiplier} is invalid");
     }
 
     /// <summary>
@@ -279,6 +306,132 @@
         NotificationService.Notify(new NotificationMessage { Severity = NotificationSeverity.Success, Summary = "Configuration Copied", Duration = 4000 });
 
         await JSRuntime.InvokeVoidAsync("copyToClipboard", jsonText);
+    }
+
+    /// <summary>
+    /// Calculates scaling levels based on configuration
+    /// </summary>
+    private void CalculateScalingLevels()
+    {
+        _scalingLevelsMarkup = [];
+        HashSet<ScalingLevel> scalingLevels = new();
+
+        decimal adjustedQuantity = 0;
+        if (TryParseDecimal(_pairsInfo[_selectedPair].LotSizeFilter?.MinNotionalValue, out decimal minNotionalValue) &&
+            TryParseDecimal(_pairsInfo[_selectedPair].LotSizeFilter?.QtyStep, out decimal qtyStep) &&
+            TryParseDecimal(_pairsInfo[_selectedPair].LotSizeFilter?.MinOrderQty, out decimal minOrderQty) &&
+            TryParseDecimal(_pairsInfo[_selectedPair].PriceFilter?.TickSize, out decimal priceTickSize) &&
+            TryParseDecimal(_tickers?.LastPrice, out decimal lastPrice))
+        {
+            // Calculate quantity based on leverage, initial margin and qty step and check if it is more than min order qty and min notional value
+            decimal rawQuantity = (_configuration.InitialMargin.GetValueOrDefault() * _configuration.Leverage.GetValueOrDefault()) / lastPrice;
+            adjustedQuantity = Math.Floor(rawQuantity / qtyStep) * qtyStep;
+
+            if (adjustedQuantity < minOrderQty)
+            {
+                _errors.Add($"Initial calculated quantity {adjustedQuantity} is less than the min order quantity {minOrderQty}. Raw quantity is {rawQuantity}");
+                return;
+            }
+
+            decimal notionalValue = adjustedQuantity * lastPrice;
+
+            if (notionalValue < minNotionalValue)
+            {
+                _errors.Add($"Initial quantity {adjustedQuantity} * leverage {_configuration.Leverage} * price {lastPrice.ToString($"N{GetDecimalPlaces(priceTickSize)}")} results in notional value {notionalValue.ToString($"N{GetDecimalPlaces(priceTickSize)}")}, which is less than the min notional value {minNotionalValue}");
+                return;
+            }
+
+            byte decimalPlaces = GetDecimalPlaces(priceTickSize);
+            decimal totalMargin = adjustedQuantity * lastPrice / _configuration.Leverage.GetValueOrDefault();
+
+            scalingLevels.Add(new()
+                {
+                    Level = 0,
+                    AveragePrice = lastPrice,
+                    PnL = 0,
+                    Price = lastPrice,
+                    Quantity = adjustedQuantity,
+                    Margin = totalMargin,
+                    TotalQuantity = adjustedQuantity,
+                    TotalMargin = totalMargin,
+                });
+
+            decimal pnlFactor = 1m;
+            decimal levelQty = adjustedQuantity * _configuration.InitialScalingQuantityMultiplier ?? 1;
+
+            for (ushort i = 0; i < _configuration.NumberOfScalingLevels; i++)
+            {
+                decimal pnlPercentage = Math.Min(
+                    _configuration.InitialScalingUnrealizedPnL.GetValueOrDefault() * pnlFactor,
+                    _configuration.MaxScalingUnrealizedPnL.GetValueOrDefault());
+
+                decimal takeProfitFactor = pnlPercentage / (100m * _configuration.Leverage.GetValueOrDefault());
+
+                decimal levelPrice = _configuration.Side == "Buy"
+                    ? lastPrice * (1m - takeProfitFactor)
+                    : lastPrice * (1m + takeProfitFactor);
+
+                levelQty *= _configuration.ScalingQuantityMultiplier.GetValueOrDefault();
+                decimal roundedPrice = Math.Round(levelPrice / priceTickSize) * priceTickSize;
+                decimal roundedQty = Math.Round(levelQty / qtyStep) * qtyStep;
+                decimal margin = roundedQty * roundedPrice / _configuration.Leverage.GetValueOrDefault();
+
+                decimal totalQty = adjustedQuantity + roundedQty;
+                lastPrice = (lastPrice * adjustedQuantity + roundedPrice * roundedQty) / totalQty;
+                adjustedQuantity = totalQty;
+                totalMargin += margin;
+
+                pnlFactor *= _configuration.ScalingUnrealisedPnlMultiplier.GetValueOrDefault();
+
+                if (roundedQty < minOrderQty)
+                {
+                    _errors.Add($"Scaling level {i + 1} - Calculated quantity {roundedQty} is less than the min order quantity {minOrderQty}");
+                    return;
+                }
+
+                notionalValue = roundedQty * roundedPrice;
+                if (notionalValue < minNotionalValue)
+                {
+                    _errors.Add($"Scaling level {i + 1} - Calculated quantity {roundedQty} * leverage {_configuration.Leverage} * price {roundedPrice.ToString($"N{decimalPlaces}")} results in notional value {notionalValue.ToString($"N{decimalPlaces}")}, which is less than the min notional value {minNotionalValue}");
+                    return;
+                }
+
+                scalingLevels.Add(new()
+                    {
+                        Level = (ushort)(i + 1),
+                        AveragePrice = lastPrice,
+                        PnL = pnlPercentage,
+                        Price = roundedPrice,
+                        Quantity = roundedQty,
+                        Margin = margin,
+                        TotalQuantity = adjustedQuantity,
+                        TotalMargin = totalMargin
+                    });
+            }
+
+            _scalingLevelsMarkup = scalingLevels.Select(x => new MarkupString(
+                $"<b class='highlight'>{x.Level}</b>: Avg: <b>{x.AveragePrice.ToString($"N{decimalPlaces}")}</b> " +
+                $"PnL: <b>-{x.PnL:N0}%</b> - {_configuration.Side} " +
+                $"<b class='highlight'>{x.Price.ToString($"N{decimalPlaces}")}</b> " +
+                $"Qty: <b>{x.Quantity}</b> Margin: <b>{x.Margin:N2}</b> " +
+                $"Total Qty: <b>{x.TotalQuantity}</b> Total Margin: <b>{x.TotalMargin:N2}</b>"
+            )).ToHashSet();
+        }
+    }
+
+    /// <summary>
+    /// Gets number of decimal places for given tick size
+    /// </summary>
+    private byte GetDecimalPlaces(decimal tickSize)
+    {
+        byte decimals = 0;
+        while (tickSize < 1)
+        {
+            tickSize *= 10;
+            decimals++;
+        }
+
+        return decimals;
     }
 
     /// <summary>

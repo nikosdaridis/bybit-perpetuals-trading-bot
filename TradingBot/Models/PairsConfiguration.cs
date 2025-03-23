@@ -15,10 +15,10 @@
                     InitialPriceTickSizeOffset = 2,
                     InitialPriceTickSizeThreshold = 5,
                     TakeProfitPercentage = 50,
-                    NumberOfScalingLevels = 15,
+                    NumberOfScalingLevels = 10,
                     InitialScalingUnrealizedPnL = 100,
                     InitialScalingQuantityMultiplier = 0.5m,
-                    MaxScalingUnrealizedPnL = 2000,
+                    MaxScalingUnrealizedPnL = 700,
                     ScalingUnrealisedPnlMultiplier = 1.3m,
                     ScalingQuantityMultiplier = 1.2m
                 }
@@ -32,10 +32,10 @@
                     InitialPriceTickSizeOffset = 2,
                     InitialPriceTickSizeThreshold = 5,
                     TakeProfitPercentage = 50,
-                    NumberOfScalingLevels = 15,
+                    NumberOfScalingLevels = 10,
                     InitialScalingUnrealizedPnL = 100,
                     InitialScalingQuantityMultiplier = 0.5m,
-                    MaxScalingUnrealizedPnL = 2000,
+                    MaxScalingUnrealizedPnL = 700,
                     ScalingUnrealisedPnlMultiplier = 1.3m,
                     ScalingQuantityMultiplier = 1.2m
                 }
