@@ -1,11 +1,13 @@
 ﻿@page "/{SelectedPair?}"
 
-@inject BaseHttpClient httpClient
 @inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+@inject BaseHttpClient httpClient
+@inject NotificationService NotificationService
 
 <PageTitle>@_selectedPair Configurator - Bybit Perpetuals Trading Bot</PageTitle>
 
-@if (pairsInfo.Count <= 0)
+@if (_pairsInfo.Count <= 0)
 {
     <div class="container">
         <div class="header">
@@ -19,19 +21,27 @@
 
 <div class="container">
     <div class="header">
-        <RadzenAutoComplete @bind-Value=_selectedPair @bind-Value:after=OnSelectedPairChange Data=pairsInfo.Values TextProperty=@(nameof(InstrumentList.Symbol))
-                            MinLength=1 Style="width: 25rem" Placeholder="Search pair to configure"
+        <RadzenAutoComplete @bind-Value=_selectedPair @bind-Value:after=OnSelectedPairChange Data=_pairsInfo.Values TextProperty=@(nameof(InstrumentList.Symbol))
+                            MinLength=1 Style="width: 20rem" Placeholder="Search pair to configure"
                             FilterOperator=StringFilterOperator.Contains FilterCaseSensitivity=FilterCaseSensitivity.CaseInsensitive>
         </RadzenAutoComplete>
+
+        @if (!string.IsNullOrEmpty(_selectedPair) && _tickers is not null && _errors.Count <= 0)
+        {
+            <RadzenButton Click=@(args => CopyToClipboardAsync()) Image="copyClipboard.svg" ButtonStyle=ButtonStyle.Base>
+                <span class="rz-button-text">Copy Configuration</span>
+                <RadzenImage Path="copyClipboard.svg" Style="width: 1rem; height: 1rem; margin-inline-start: 0.5rem;" />
+            </RadzenButton>
+        }
     </div>
 
-    @if (!string.IsNullOrEmpty(_selectedPair) && pairsInfo.ContainsKey(_selectedPair) && _tickers is not null)
+    @if (!string.IsNullOrEmpty(_selectedPair) && _pairsInfo.ContainsKey(_selectedPair) && _tickers is not null)
     {
         <div class="info-row">
             <h4>Last Price: @_tickers.LastPrice</h4>
-            <h4>Min Quantity: @pairsInfo[_selectedPair]?.LotSizeFilter?.MinOrderQty</h4>
-            <h4>Quantity Step: @pairsInfo[_selectedPair]?.LotSizeFilter?.QtyStep</h4>
-            <h4>Min Notional Value: @pairsInfo[_selectedPair]?.LotSizeFilter?.MinNotionalValue</h4>
+            <h4>Min Quantity: @_pairsInfo[_selectedPair]?.LotSizeFilter?.MinOrderQty</h4>
+            <h4>Quantity Step: @_pairsInfo[_selectedPair]?.LotSizeFilter?.QtyStep</h4>
+            <h4>Min Notional Value: @_pairsInfo[_selectedPair]?.LotSizeFilter?.MinNotionalValue</h4>
         </div>
 
         <div class="form-container">
@@ -46,12 +56,12 @@
 
                 <div class="input-group">
                     <label for="leverage">
-                        Leverage @($"({pairsInfo[_selectedPair]?.LeverageFilter?.MinLeverage?.TrimEnd('0').TrimEnd('.')} - {pairsInfo[_selectedPair]?.LeverageFilter?.MaxLeverage?.TrimEnd('0').TrimEnd('.')})"):
+                        Leverage @($"({_pairsInfo[_selectedPair]?.LeverageFilter?.MinLeverage?.TrimEnd('0').TrimEnd('.')} - {_pairsInfo[_selectedPair]?.LeverageFilter?.MaxLeverage?.TrimEnd('0').TrimEnd('.')})"):
                     </label>
                     <input id="leverage" type="number" @bind=_configuration.Leverage @bind:after=OnInputChange
-                           min=@pairsInfo[_selectedPair]?.LeverageFilter?.MinLeverage
-                           max=@pairsInfo[_selectedPair]?.LeverageFilter?.MaxLeverage
-                           step=@pairsInfo[_selectedPair]?.LeverageFilter?.LeverageStep />
+                           min=@_pairsInfo[_selectedPair]?.LeverageFilter?.MinLeverage
+                           max=@_pairsInfo[_selectedPair]?.LeverageFilter?.MaxLeverage
+                           step=@_pairsInfo[_selectedPair]?.LeverageFilter?.LeverageStep />
                 </div>
 
                 <div class="input-group">
@@ -115,6 +125,20 @@
                 </div>
             </div>
         </div>
+
+        @if (_errors.Count > 0)
+        {
+            <div class="results-container">
+                <ul class="errors">
+                    @foreach (var error in _errors)
+                    {
+                        <li class="error">
+                            <p class="error-text">@error</p>
+                        </li>
+                    }
+                </ul>
+            </div>
+        }
     }
 </div>
 
@@ -122,10 +146,11 @@
     [Parameter]
     public string? SelectedPair { get; set; }
 
-    private Dictionary<string, InstrumentList> pairsInfo = [];
+    private Dictionary<string, InstrumentList> _pairsInfo = [];
     private string _selectedPair = string.Empty;
     private TickersList? _tickers;
     private Configuration _configuration = new("Buy", 20, 5, 2, 5, 50, 15, 100, 0.5m, 2000, 1.3m, 1.2m);
+    private HashSet<string> _errors = [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -141,7 +166,7 @@
             "https://api.bybit.com/v5/market/instruments-info?category=linear&limit=1000");
 
         if (responseInstrumentsInfo is not null && responseInstrumentsInfo?.Result?.List?.Count > 0)
-            pairsInfo = responseInstrumentsInfo?.Result?.List?.ToDictionary(x => x.Symbol ?? string.Empty, x => x) ?? [];
+            _pairsInfo = responseInstrumentsInfo?.Result?.List?.ToDictionary(x => x.Symbol ?? string.Empty, x => x) ?? [];
     }
 
     private async Task OnSelectedPairChange()
@@ -168,6 +193,104 @@
 
     private void OnInputChange()
     {
-        Console.WriteLine("value changed");
+        ValidateConfiguration();
+    }
+
+    /// <summary>
+    /// Validates configuration values and populates errors
+    /// </summary>
+    private void ValidateConfiguration()
+    {
+        _errors.Clear();
+
+        if (string.IsNullOrEmpty(_selectedPair) || !_pairsInfo.ContainsKey(_selectedPair))
+            return;
+
+        // Check if side is Buy or Sell
+        if (_configuration.Side is null || (_configuration.Side != "Buy" && _configuration.Side != "Sell"))
+            _errors.Add($"Side {_configuration.Side} is invalid");
+
+        //Check if leverage is more then 0
+        if (_configuration.Leverage is null || _configuration.Leverage <= 0)
+            _errors.Add($"Leverage {_configuration.Leverage} is invalid");
+
+        // Check if leverage is within expected range and step
+        if (TryParseDecimal(_pairsInfo[_selectedPair]?.LeverageFilter?.MinLeverage, out decimal minLeverage) &&
+            TryParseDecimal(_pairsInfo[_selectedPair]?.LeverageFilter?.MaxLeverage, out decimal maxLeverage) &&
+            TryParseDecimal(_pairsInfo[_selectedPair]?.LeverageFilter?.LeverageStep, out decimal leverageStep))
+        {
+            if (_configuration.Leverage < minLeverage || _configuration.Leverage > maxLeverage || (_configuration.Leverage - minLeverage) % leverageStep != 0)
+                _errors.Add($"Leverage {_configuration.Leverage} is invalid");
+        }
+
+        //Check if initial margin is more then 0
+        if (_configuration.InitialMargin is null || _configuration.InitialMargin <= 0)
+            _errors.Add($"Initial margin {_configuration.InitialMargin} is invalid");
+
+        //Check if initial price tick size offset is not negative
+        if (_configuration.InitialPriceTickSizeOffset is null || _configuration.InitialPriceTickSizeOffset < 0)
+            _errors.Add($"Initial price tick size offset {_configuration.InitialPriceTickSizeOffset} is invalid");
+
+        //Check if initial price tick size threshold is more than 0 and more than initial order tick size
+        if (_configuration.InitialPriceTickSizeThreshold is null || _configuration.InitialPriceTickSizeThreshold <= 0 ||
+            _configuration.InitialPriceTickSizeThreshold <= _configuration.InitialPriceTickSizeOffset)
+            _errors.Add($"Initial price tick size threshold {_configuration.InitialPriceTickSizeThreshold} is invalid, should be more than initial price tick size offset {_configuration.InitialPriceTickSizeOffset}");
+
+        // Check if take profit percentage is more than 0
+        if (_configuration.TakeProfitPercentage is null || _configuration.TakeProfitPercentage <= 0)
+            _errors.Add($"Take profit percentage {_configuration.TakeProfitPercentage} is invalid");
+
+        //Check if number of scaling levels is not negative
+        if (_configuration.NumberOfScalingLevels is null || _configuration.NumberOfScalingLevels < 0)
+            _errors.Add($"Number of scaling levels {_configuration.NumberOfScalingLevels} is invalid");
+
+        // Check if initial step unrealised PnL percentage is more than 0
+        if (_configuration.InitialScalingUnrealizedPnL is null || _configuration.InitialScalingUnrealizedPnL <= 0)
+            _errors.Add($"Initial step unrealised PnL percentage {_configuration.InitialScalingUnrealizedPnL} is invalid");
+
+        // Check if initial step quantity multiplier is more than 0
+        if (_configuration.InitialScalingQuantityMultiplier is null || _configuration.InitialScalingQuantityMultiplier <= 0)
+            _errors.Add($"Initial step quantity multiplier {_configuration.InitialScalingQuantityMultiplier} is invalid");
+
+        // Check if max step unrealised PnL percentage is more than initial step unrealised PnL percentage
+        if (_configuration.MaxScalingUnrealizedPnL is null || _configuration.MaxScalingUnrealizedPnL < _configuration.InitialScalingUnrealizedPnL)
+            _errors.Add($"Max step unrealised PnL percentage {_configuration.MaxScalingUnrealizedPnL} is invalid, should be more than initial step unrealised PnL percentage {_configuration.InitialScalingUnrealizedPnL}");
+
+        // Check if step unrealised PnL multiplier is more than 0
+        if (_configuration.ScalingUnrealisedPnlMultiplier is null || _configuration.ScalingUnrealisedPnlMultiplier <= 0)
+            _errors.Add($"Step unrealised PnL multiplier {_configuration.ScalingUnrealisedPnlMultiplier} is invalid");
+
+        // Check if step quantity multiplier is more than 0
+        if (_configuration.ScalingQuantityMultiplier is null || _configuration.ScalingQuantityMultiplier <= 0)
+            _errors.Add($"Step quantity multiplier {_configuration.ScalingQuantityMultiplier} is invalid");
+    }
+
+    /// <summary>
+    /// Copies configuration to clipboard
+    /// </summary>
+    private async Task CopyToClipboardAsync()
+    {
+        if (string.IsNullOrEmpty(_selectedPair) || _tickers is null || _errors.Count > 0)
+            return;
+
+        string jsonText = JsonConvert.SerializeObject(_configuration, Formatting.Indented);
+        jsonText = $"\"{_selectedPair}\": {jsonText},";
+
+        NotificationService.Notify(new NotificationMessage { Severity = NotificationSeverity.Success, Summary = "Configuration Copied", Duration = 4000 });
+
+        await JSRuntime.InvokeVoidAsync("copyToClipboard", jsonText);
+    }
+
+    /// <summary>
+    /// Converts string to decimal with decimal point, invariant culture and normalizes value
+    /// </summary>
+    private bool TryParseDecimal(string? input, out decimal result)
+    {
+        bool success = decimal.TryParse(input, NumberStyles.Number, CultureInfo.InvariantCulture, out result);
+
+        if (success)
+            result = result / 1.000000000000000000000000000000000m;
+
+        return success;
     }
 }

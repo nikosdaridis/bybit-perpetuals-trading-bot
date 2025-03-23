@@ -202,7 +202,7 @@ namespace BybitPerpetualsTradingBot
                     return false;
                 }
 
-                //Check if leverage is more then 0
+                //Check if leverage is more than 0
                 if (pairConfiguration.Leverage is null || pairConfiguration.Leverage <= 0)
                 {
                     LogAndPrint(LogLevel.Error, "Active trading pair {0} leverage {1} is invalid", pair, pairConfiguration.Leverage);
@@ -226,8 +226,8 @@ namespace BybitPerpetualsTradingBot
                     return false;
                 }
 
-                //Check if initial margin is not negative
-                if (pairConfiguration.InitialMargin is null || pairConfiguration.InitialMargin < 0)
+                //Check if initial margin is more than 0
+                if (pairConfiguration.InitialMargin is null || pairConfiguration.InitialMargin <= 0)
                 {
                     LogAndPrint(LogLevel.Error, "Active trading pair {0} initial margin {1} is invalid", pair, pairConfiguration.InitialMargin);
                     return false;
