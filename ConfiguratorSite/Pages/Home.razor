@@ -106,7 +106,7 @@
                 <div class="input-group">
                     <label for="initial-scaling-unrealized-pnl">Initial Scaling Unrealized PnL:</label>
                     <input id="initial-scaling-unrealized-pnl" type="number" @bind=_configuration.InitialScalingUnrealizedPnL @bind:after=OnInputChange
-                           min=1 max=10000 step=0.01 />
+                           min=1 max=10000 step=1 />
                 </div>
 
                 <div class="input-group">
@@ -118,7 +118,7 @@
                 <div class="input-group">
                     <label for="max-scaling-unrealized-pnl">Max Scaling Unrealized PnL:</label>
                     <input id="max-scaling-unrealized-pnl" type="number" @bind=_configuration.MaxScalingUnrealizedPnL @bind:after=OnInputChange
-                           min=1 max=10000 step=0.01 />
+                           min=1 max=10000 step=1 />
                 </div>
 
                 <div class="input-group">

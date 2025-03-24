@@ -379,6 +379,8 @@ namespace BybitPerpetualsTradingBot
                 return false;
             }
 
+            LogAndPrint(LogLevel.Information, "{0}: All orders cancelled", Symbol);
+
             if (!TryParseDecimal(ActiveTradingPair.Position.Leverage, out decimal leverage))
             {
                 LogAndPrint(LogLevel.Error, "{0}: Error parsing leverage", Symbol);
@@ -543,6 +545,18 @@ namespace BybitPerpetualsTradingBot
                     return true;
                 }
             }
+
+            // Check position info again before placing take profit order
+            responsePositionInfo = await GetPositionInfo(Category.Linear, Symbol);
+            if (responsePositionInfo?.RetCode != 0)
+            {
+                LogAndPrint(LogLevel.Error, "{0}: Error getting position info, {1}", Symbol, responsePositionInfo?.RetMsg);
+                return false;
+            }
+            ActiveTradingPair.Position = responsePositionInfo?.Result?.List?.FirstOrDefault() ?? new();
+
+            if (!TryParseDecimal(ActiveTradingPair.Position.Size, out decimal latestSize) || latestSize <= 0)
+                return false;
 
             // Place take profit order
             ApiResponse<OrderResult, object>? responsePlaceOrder = await PlaceOrder(
