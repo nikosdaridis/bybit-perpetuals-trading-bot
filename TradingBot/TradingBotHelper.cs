@@ -118,14 +118,7 @@ namespace BybitPerpetualsTradingBot
 
                     try
                     {
-                        Stopwatch pairStopwatch = Stopwatch.StartNew();
-                        bool result = await taskFunc(pair.Key, pair.Value);
-                        pairStopwatch.Stop();
-
-                        if (result)
-                            LogAndPrint(LogLevel.Information, "({0}) {1} {2:F1} sec", taskFunc.Method.Name, pair.Key, pairStopwatch.Elapsed.TotalSeconds);
-
-                        return result;
+                        return await taskFunc(pair.Key, pair.Value);
                     }
                     catch (Exception ex)
                     {
@@ -173,39 +166,39 @@ namespace BybitPerpetualsTradingBot
             {
                 if (!_instrumentsInfo.TryGetValue(pair, out InstrumentList? instrumentList))
                 {
-                    LogAndPrint(LogLevel.Error, "Active trading pair {0} not found in instruments info", pair);
+                    LogAndPrint(LogLevel.Error, "{0}: not found in instruments info", pair);
                     return false;
                 }
 
                 if (instrumentList is null)
                 {
-                    LogAndPrint(LogLevel.Error, "Active trading pair {0} instrument list is null", pair);
+                    LogAndPrint(LogLevel.Error, "{0}: instrument list is null", pair);
                     return false;
                 }
 
                 if (!_pairsConfiguration.PairsConfigurations.TryGetValue(pair, out PairConfiguration? pairConfiguration))
                 {
-                    LogAndPrint(LogLevel.Error, "Active trading pair {0} not found in pairs configuration", pair);
+                    LogAndPrint(LogLevel.Error, "{0}: not found in pairs configuration", pair);
                     return false;
                 }
 
                 if (pairConfiguration is null)
                 {
-                    LogAndPrint(LogLevel.Error, "Active trading pair {0} configuration is null", pair);
+                    LogAndPrint(LogLevel.Error, "{0}: configuration is null", pair);
                     return false;
                 }
 
                 // Check if side is Buy or Sell
                 if (pairConfiguration.Side is null || (pairConfiguration.Side != Side.Buy && pairConfiguration.Side != Side.Sell))
                 {
-                    LogAndPrint(LogLevel.Error, "Active trading pair {0} side {1} is invalid", pair, pairConfiguration.Side);
+                    LogAndPrint(LogLevel.Error, "{0}: side {1} is invalid", pair, pairConfiguration.Side);
                     return false;
                 }
 
                 //Check if leverage is more than 0
                 if (pairConfiguration.Leverage is null || pairConfiguration.Leverage <= 0)
                 {
-                    LogAndPrint(LogLevel.Error, "Active trading pair {0} leverage {1} is invalid", pair, pairConfiguration.Leverage);
+                    LogAndPrint(LogLevel.Error, "{0}: leverage {1} is invalid", pair, pairConfiguration.Leverage);
                     return false;
                 }
 
@@ -216,27 +209,27 @@ namespace BybitPerpetualsTradingBot
                 {
                     if (pairConfiguration.Leverage < minLeverage || pairConfiguration.Leverage > maxLeverage || (pairConfiguration.Leverage - minLeverage) % leverageStep != 0)
                     {
-                        LogAndPrint(LogLevel.Error, "Active trading pair {0} leverage {1} is invalid", pair, pairConfiguration.Leverage);
+                        LogAndPrint(LogLevel.Error, "{0}: leverage {1} is invalid", pair, pairConfiguration.Leverage);
                         return false;
                     }
                 }
                 else
                 {
-                    LogAndPrint(LogLevel.Error, "Active trading pair {0} leverage filter data is invalid", pair);
+                    LogAndPrint(LogLevel.Error, "{0}: leverage filter data is invalid", pair);
                     return false;
                 }
 
                 //Check if initial margin is more than 0
                 if (pairConfiguration.InitialMargin is null || pairConfiguration.InitialMargin <= 0)
                 {
-                    LogAndPrint(LogLevel.Error, "Active trading pair {0} initial margin {1} is invalid", pair, pairConfiguration.InitialMargin);
+                    LogAndPrint(LogLevel.Error, "{0}: initial margin {1} is invalid", pair, pairConfiguration.InitialMargin);
                     return false;
                 }
 
                 //Check if initial price tick size offset is not negative
                 if (pairConfiguration.InitialPriceTickSizeOffset is null || pairConfiguration.InitialPriceTickSizeOffset < 0)
                 {
-                    LogAndPrint(LogLevel.Error, "Active trading pair {0} initial price tick size offset {1} is invalid", pair, pairConfiguration.InitialPriceTickSizeOffset);
+                    LogAndPrint(LogLevel.Error, "{0}: initial price tick size offset {1} is invalid", pair, pairConfiguration.InitialPriceTickSizeOffset);
                     return false;
                 }
 
@@ -244,56 +237,56 @@ namespace BybitPerpetualsTradingBot
                 if (pairConfiguration.InitialPriceTickSizeThreshold is null || pairConfiguration.InitialPriceTickSizeThreshold <= 0 ||
                     pairConfiguration.InitialPriceTickSizeThreshold <= pairConfiguration.InitialPriceTickSizeOffset)
                 {
-                    LogAndPrint(LogLevel.Error, "Active trading pair {0} initial price tick size threshold {1} is invalid", pair, pairConfiguration.InitialPriceTickSizeThreshold);
+                    LogAndPrint(LogLevel.Error, "{0}: initial price tick size threshold {1} is invalid", pair, pairConfiguration.InitialPriceTickSizeThreshold);
                     return false;
                 }
 
                 // Check if take profit percentage is more than 0
                 if (pairConfiguration.TakeProfitPercentage is null || pairConfiguration.TakeProfitPercentage <= 0)
                 {
-                    LogAndPrint(LogLevel.Error, "Active trading pair {0} take profit percentage {1} is invalid", pair, pairConfiguration.TakeProfitPercentage);
+                    LogAndPrint(LogLevel.Error, "{0}: take profit percentage {1} is invalid", pair, pairConfiguration.TakeProfitPercentage);
                     return false;
                 }
 
                 //Check if number of scaling levels is min 0 and max 99
                 if (pairConfiguration.NumberOfScalingLevels is null || pairConfiguration.NumberOfScalingLevels < 0 || pairConfiguration.NumberOfScalingLevels > 99)
                 {
-                    LogAndPrint(LogLevel.Error, "Active trading pair {0} number of scaling levels {1} is invalid", pair, pairConfiguration.NumberOfScalingLevels);
+                    LogAndPrint(LogLevel.Error, "{0}: number of scaling levels {1} is invalid", pair, pairConfiguration.NumberOfScalingLevels);
                     return false;
                 }
 
                 // Check if initial scaling unrealised PnL percentage is more than 0
                 if (pairConfiguration.InitialScalingUnrealizedPnL is null || pairConfiguration.InitialScalingUnrealizedPnL <= 0)
                 {
-                    LogAndPrint(LogLevel.Error, "Active trading pair {0} initial scaling unrealised PnL percentage {1} is invalid", pair, pairConfiguration.InitialScalingUnrealizedPnL);
+                    LogAndPrint(LogLevel.Error, "{0}: initial scaling unrealised PnL percentage {1} is invalid", pair, pairConfiguration.InitialScalingUnrealizedPnL);
                     return false;
                 }
 
                 // Check if initial scaling quantity multiplier is more than 0
                 if (pairConfiguration.InitialScalingQuantityMultiplier is null || pairConfiguration.InitialScalingQuantityMultiplier <= 0)
                 {
-                    LogAndPrint(LogLevel.Error, "Active trading pair {0} initial scaling quantity multiplier {1} is invalid", pair, pairConfiguration.InitialScalingQuantityMultiplier);
+                    LogAndPrint(LogLevel.Error, "A{0}: initial scaling quantity multiplier {1} is invalid", pair, pairConfiguration.InitialScalingQuantityMultiplier);
                     return false;
                 }
 
                 // Check if max scaling unrealised PnL percentage is more than initial scaling unrealised PnL percentage
                 if (pairConfiguration.MaxScalingUnrealizedPnL is null || pairConfiguration.MaxScalingUnrealizedPnL < pairConfiguration.InitialScalingUnrealizedPnL)
                 {
-                    LogAndPrint(LogLevel.Error, "Active trading pair {0} max scaling unrealised PnL percentage {1} is invalid", pair, pairConfiguration.MaxScalingUnrealizedPnL);
+                    LogAndPrint(LogLevel.Error, "{0}: max scaling unrealised PnL percentage {1} is invalid", pair, pairConfiguration.MaxScalingUnrealizedPnL);
                     return false;
                 }
 
                 // Check if scaling unrealised PnL multiplier is more than 0
                 if (pairConfiguration.ScalingUnrealisedPnlMultiplier is null || pairConfiguration.ScalingUnrealisedPnlMultiplier <= 0)
                 {
-                    LogAndPrint(LogLevel.Error, "Active trading pair {0} scaling unrealised PnL multiplier {1} is invalid", pair, pairConfiguration.ScalingUnrealisedPnlMultiplier);
+                    LogAndPrint(LogLevel.Error, "{0}: scaling unrealised PnL multiplier {1} is invalid", pair, pairConfiguration.ScalingUnrealisedPnlMultiplier);
                     return false;
                 }
 
                 // Check if scaling quantity multiplier is more than 0
                 if (pairConfiguration.ScalingQuantityMultiplier is null || pairConfiguration.ScalingQuantityMultiplier <= 0)
                 {
-                    LogAndPrint(LogLevel.Error, "Active trading pair {0} scaling quantity multiplier {1} is invalid", pair, pairConfiguration.ScalingQuantityMultiplier);
+                    LogAndPrint(LogLevel.Error, "{0}: scaling quantity multiplier {1} is invalid", pair, pairConfiguration.ScalingQuantityMultiplier);
                     return false;
                 }
 
@@ -306,7 +299,7 @@ namespace BybitPerpetualsTradingBot
                 ApiResponse<GetPositionInfoResult, object>? responsePositionInfo = await GetPositionInfo(Category.Linear, pair);
                 if (responsePositionInfo?.RetCode != 0)
                 {
-                    LogAndPrint(LogLevel.Error, "Error getting position info for active trading pair {0}: {1}", pair, responsePositionInfo?.RetMsg);
+                    LogAndPrint(LogLevel.Error, "{0}: Error getting position info, {1}", pair, responsePositionInfo?.RetMsg);
                     return false;
                 }
                 _activeTradingPairs[pair].Position = responsePositionInfo?.Result?.List?.FirstOrDefault() ?? new();
@@ -315,7 +308,7 @@ namespace BybitPerpetualsTradingBot
                 ApiResponse<GetTickersResult, object>? responseTickers = await GetTickers(Category.Linear, pair);
                 if (responseTickers?.RetCode != 0)
                 {
-                    LogAndPrint(LogLevel.Error, "Error getting tickers for active trading pair {0}: {1}", pair, responseTickers?.RetMsg);
+                    LogAndPrint(LogLevel.Error, "{0}: Error getting tickers, {1}", pair, responseTickers?.RetMsg);
                     return false;
                 }
             }
@@ -335,7 +328,7 @@ namespace BybitPerpetualsTradingBot
             ApiResponse<GetPositionInfoResult, object>? responsePositionInfo = await GetPositionInfo(Category.Linear, Symbol);
             if (responsePositionInfo?.RetCode != 0)
             {
-                LogAndPrint(LogLevel.Error, "Error getting position info for active trading pair {0}: {1}", Symbol, responsePositionInfo?.RetMsg);
+                LogAndPrint(LogLevel.Error, "{0}: Error getting position info, {1}", Symbol, responsePositionInfo?.RetMsg);
                 return false;
             }
             ActiveTradingPair.Position = responsePositionInfo?.Result?.List?.FirstOrDefault() ?? new();
@@ -348,7 +341,7 @@ namespace BybitPerpetualsTradingBot
             ApiResponse<GetTickersResult, object>? responseTickers = await GetTickers(Category.Linear, Symbol);
             if (responseTickers?.RetCode != 0)
             {
-                LogAndPrint(LogLevel.Error, "Error getting tickers for active trading pair {0}: {1}", Symbol, responseTickers?.RetMsg);
+                LogAndPrint(LogLevel.Error, "{0}: Error getting tickers, {1}", Symbol, responseTickers?.RetMsg);
                 return false;
             }
 
@@ -356,7 +349,7 @@ namespace BybitPerpetualsTradingBot
             ApiResponse<GetOpenAndClosedOrdersResult, object>? responseOpenOrders = await GetOpenAndClosedOrders(Category.Linear, Symbol, OpenOnly.True);
             if (responseOpenOrders?.RetCode != 0)
             {
-                LogAndPrint(LogLevel.Error, "Error getting open orders for active trading pair {0}: {1}", Symbol, responseOpenOrders?.RetMsg);
+                LogAndPrint(LogLevel.Error, "{0}: Error getting open orders, {1}", Symbol, responseOpenOrders?.RetMsg);
                 return false;
             }
 
@@ -382,13 +375,13 @@ namespace BybitPerpetualsTradingBot
             ApiResponse<CancelAllOrdersResult, object>? responseCancelAll = await CancelAllOrders(Category.Linear, Symbol);
             if (responseCancelAll?.RetCode != 0)
             {
-                LogAndPrint(LogLevel.Error, "Error cancelling all orders for active trading pair {0}: {1}", Symbol, responseCancelAll?.RetMsg);
+                LogAndPrint(LogLevel.Error, "{0}: Error cancelling all orders, {1}", Symbol, responseCancelAll?.RetMsg);
                 return false;
             }
 
             if (!TryParseDecimal(ActiveTradingPair.Position.Leverage, out decimal leverage))
             {
-                LogAndPrint(LogLevel.Error, "Error parsing leverage for active trading pair {0}", Symbol);
+                LogAndPrint(LogLevel.Error, "{0}: Error parsing leverage", Symbol);
                 return false;
             }
 
@@ -398,7 +391,7 @@ namespace BybitPerpetualsTradingBot
                 ApiResponse<object, object>? responseSetLeverage = await SetLeverage(Category.Linear, Symbol, ActiveTradingPair.Configuration.Leverage.ToString()!, ActiveTradingPair.Configuration.Leverage.ToString()!);
                 if (responseSetLeverage?.RetCode != 0 && responseSetLeverage?.RetCode != 110043) // 110043: leverage is the same
                 {
-                    LogAndPrint(LogLevel.Error, "Error setting leverage for active trading pair {0}: {1}", Symbol, responseSetLeverage?.RetMsg);
+                    LogAndPrint(LogLevel.Error, "{0}: Error setting leverage for, {1}", Symbol, responseSetLeverage?.RetMsg);
                     return false;
                 }
             }
@@ -415,7 +408,7 @@ namespace BybitPerpetualsTradingBot
             if (!TryParseDecimal(priceString, out decimal price) ||
                 !TryParseDecimal(_instrumentsInfo[Symbol].PriceFilter?.TickSize, out decimal tickSize))
             {
-                LogAndPrint(LogLevel.Error, "Error parsing price or tick size for active trading pair {0}", Symbol);
+                LogAndPrint(LogLevel.Error, "{0}: Error parsing price or tick size", Symbol);
                 return false;
             }
             orderPrice = price + (priceModifier * tickSize);
@@ -424,7 +417,7 @@ namespace BybitPerpetualsTradingBot
             responsePositionInfo = await GetPositionInfo(Category.Linear, Symbol);
             if (responsePositionInfo?.RetCode != 0)
             {
-                LogAndPrint(LogLevel.Error, "Error getting position info for active trading pair {0}: {1}", Symbol, responsePositionInfo?.RetMsg);
+                LogAndPrint(LogLevel.Error, "{0}: Error getting position info for, {1}", Symbol, responsePositionInfo?.RetMsg);
                 return false;
             }
             ActiveTradingPair.Position = responsePositionInfo?.Result?.List?.FirstOrDefault() ?? new();
@@ -445,7 +438,7 @@ namespace BybitPerpetualsTradingBot
 
                 if (adjustedQuantity < minOrderQty)
                 {
-                    LogAndPrint(LogLevel.Error, "Active trading pair {0}: adjusted quantity {1} is below MinOrderQty {2}. Raw quantity: {3}", Symbol, adjustedQuantity, minOrderQty, rawQuantity);
+                    LogAndPrint(LogLevel.Error, "{0}: adjusted quantity {1} is below MinOrderQty {2}. Raw quantity: {3}", Symbol, adjustedQuantity, minOrderQty, rawQuantity);
                     return false;
                 }
 
@@ -453,7 +446,7 @@ namespace BybitPerpetualsTradingBot
 
                 if (notionalValue < minNotionalValue)
                 {
-                    LogAndPrint(LogLevel.Error, "Active trading pair {0}: calculated quantity {1} * leverage {2} * latest price {3} results in notional value {4}, which is less than the min notional value {5}", Symbol, adjustedQuantity, ActiveTradingPair.Configuration.Leverage, lastPrice, notionalValue, minNotionalValue);
+                    LogAndPrint(LogLevel.Error, "{0}: calculated quantity {1} * leverage {2} * latest price {3} results in notional value {4}, which is less than the min notional value {5}", Symbol, adjustedQuantity, ActiveTradingPair.Configuration.Leverage, lastPrice, notionalValue, minNotionalValue);
                     return false;
                 }
             }
@@ -469,9 +462,11 @@ namespace BybitPerpetualsTradingBot
                 TimeInForce.PostOnly);
             if (responsePlaceOrder?.RetCode != 0)
             {
-                LogAndPrint(LogLevel.Error, "Error placing initial order for active trading pair {0}: {1}", Symbol, responsePlaceOrder?.RetMsg);
+                LogAndPrint(LogLevel.Error, "{0}: Error placing initial order, {1}", Symbol, responsePlaceOrder?.RetMsg);
                 return false;
             }
+
+            LogAndPrint(LogLevel.Information, "{0}: Initial order placed, quantity {1} and price {2}", Symbol, adjustedQuantity, orderPrice);
 
             // Update active trading pair with calculated initial quantity and reset scaling levels
             ActiveTradingPair.CalculatedInitialQuantity = adjustedQuantity;
@@ -490,7 +485,7 @@ namespace BybitPerpetualsTradingBot
             ApiResponse<GetPositionInfoResult, object>? responsePositionInfo = await GetPositionInfo(Category.Linear, Symbol);
             if (responsePositionInfo?.RetCode != 0)
             {
-                LogAndPrint(LogLevel.Error, "Error getting position info for active trading pair {0}: {1}", Symbol, responsePositionInfo?.RetMsg);
+                LogAndPrint(LogLevel.Error, "{0}: Error getting position info, {1}", Symbol, responsePositionInfo?.RetMsg);
                 return false;
             }
             ActiveTradingPair.Position = responsePositionInfo?.Result?.List?.FirstOrDefault() ?? new();
@@ -503,19 +498,19 @@ namespace BybitPerpetualsTradingBot
             ApiResponse<GetOpenAndClosedOrdersResult, object>? responseOpenOrders = await GetOpenAndClosedOrders(Category.Linear, Symbol, OpenOnly.True);
             if (responseOpenOrders?.RetCode != 0)
             {
-                LogAndPrint(LogLevel.Error, "Error getting open orders for active trading pair {0}: {1}", Symbol, responseOpenOrders?.RetMsg);
+                LogAndPrint(LogLevel.Error, "{0}: Error getting open orders, {1}", Symbol, responseOpenOrders?.RetMsg);
                 return false;
             }
 
             if (!TryParseDecimal(_instrumentsInfo[Symbol].PriceFilter?.TickSize, out decimal priceTickSize) || priceTickSize <= 0)
             {
-                LogAndPrint(LogLevel.Error, "Invalid quantity step or price tick size for pair {0}", Symbol);
+                LogAndPrint(LogLevel.Error, "{0}: Invalid quantity step or price tick size", Symbol);
                 return false;
             }
 
             if (!TryParseDecimal(ActiveTradingPair.Position.AvgPrice, out decimal averagePrice) || averagePrice <= 0)
             {
-                LogAndPrint(LogLevel.Error, "Error parsing average price for active trading pair {0}", Symbol);
+                LogAndPrint(LogLevel.Error, "{0}: Error parsing average price", Symbol);
                 return false;
             }
 
@@ -541,52 +536,12 @@ namespace BybitPerpetualsTradingBot
                     ApiResponse<OrderResult, object>? responseAmendOrder = await AmendOrder(Category.Linear, Symbol, takeProfitOrder?.OrderId ?? string.Empty, ActiveTradingPair.Position.Size!, takeProfitPrice.ToString());
                     if (responseAmendOrder?.RetCode != 0)
                     {
-                        LogAndPrint(LogLevel.Error, "Error amending take profit order for active trading pair {0}: {1}", Symbol, responseAmendOrder?.RetMsg);
+                        LogAndPrint(LogLevel.Error, "{0}: Error amending take profit order, {1}", Symbol, responseAmendOrder?.RetMsg);
                         return false;
                     }
 
                     return true;
                 }
-            }
-
-            // Get tickers
-            ApiResponse<GetTickersResult, object>? responseTickers = await GetTickers(Category.Linear, Symbol);
-            if (responseTickers?.RetCode != 0)
-            {
-                LogAndPrint(LogLevel.Error, "Error getting tickers for active trading pair {0}: {1}", Symbol, responseTickers?.RetMsg);
-                return false;
-            }
-
-            if (!TryParseDecimal(responseTickers.Result?.List?.FirstOrDefault()?.LastPrice, out decimal lastPrice) || lastPrice <= 0)
-            {
-                LogAndPrint(LogLevel.Error, "Error parsing last price for active trading pair {0}", Symbol);
-                return false;
-            }
-
-            // Check if last price with 0.5% offset is more than take profit price to place reduce only market order (fallback)
-            bool lastPriceMoreThanTakeProfitPrice =
-                ActiveTradingPair.Configuration.Side == Side.Buy
-                    ? (lastPrice * 1.005m) > takeProfitPrice
-                    : (lastPrice * 0.995m) < takeProfitPrice;
-
-            if (lastPriceMoreThanTakeProfitPrice)
-            {
-                ApiResponse<OrderResult, object>? responsePlaceOrderMarket = await PlaceOrder(
-                    Category.Linear,
-                    Symbol,
-                    takeProfitSide,
-                    OrderType.Market,
-                    ActiveTradingPair.Position.Size!,
-                    timeInForce: TimeInForce.ImmediateOrCancel,
-                    reduceOnly: true);
-
-                if (responsePlaceOrderMarket?.RetCode != 0)
-                {
-                    LogAndPrint(LogLevel.Error, "Error placing reduce only market order for active trading pair {0}: {1}", Symbol, responsePlaceOrderMarket?.RetMsg);
-                    return false;
-                }
-
-                return true;
             }
 
             // Place take profit order
@@ -602,9 +557,11 @@ namespace BybitPerpetualsTradingBot
 
             if (responsePlaceOrder?.RetCode != 0)
             {
-                LogAndPrint(LogLevel.Error, "Error placing take profit order for active trading pair {0}: {1}", Symbol, responsePlaceOrder?.RetMsg);
+                LogAndPrint(LogLevel.Error, "{0}: Error placing take profit order, {1}", Symbol, responsePlaceOrder?.RetMsg);
                 return false;
             }
+
+            LogAndPrint(LogLevel.Information, "{0}: Take profit order placed, quantity {1} and price {2}", Symbol, ActiveTradingPair.Position.Size, takeProfitPrice);
 
             return true;
         }
@@ -626,7 +583,7 @@ namespace BybitPerpetualsTradingBot
                 ApiResponse<GetOpenAndClosedOrdersResult, object>? responseOpenOrders = await GetOpenAndClosedOrders(Category.Linear, Symbol, OpenOnly.True);
                 if (responseOpenOrders?.RetCode != 0)
                 {
-                    LogAndPrint(LogLevel.Error, "Error getting open orders for active trading pair {0}: {1}", Symbol, responseOpenOrders?.RetMsg);
+                    LogAndPrint(LogLevel.Error, "{0}: Error getting open orders, {1}", Symbol, responseOpenOrders?.RetMsg);
                     return false;
                 }
 
@@ -638,7 +595,7 @@ namespace BybitPerpetualsTradingBot
                 ApiResponse<GetPositionInfoResult, object>? responsePositionInfo = await GetPositionInfo(Category.Linear, Symbol);
                 if (responsePositionInfo?.RetCode != 0)
                 {
-                    LogAndPrint(LogLevel.Error, "Error getting position info for active trading pair {0}: {1}", Symbol, responsePositionInfo?.RetMsg);
+                    LogAndPrint(LogLevel.Error, "{0}: Error getting position info, {1}", Symbol, responsePositionInfo?.RetMsg);
                     return false;
                 }
 
@@ -651,7 +608,7 @@ namespace BybitPerpetualsTradingBot
             {
                 if (!await CalculateScalingLevels(Symbol, ActiveTradingPair))
                 {
-                    LogAndPrint(LogLevel.Error, "Error calculating scaling levels for active trading pair {0}", Symbol);
+                    LogAndPrint(LogLevel.Error, "{0}: Error calculating scaling levels", Symbol);
                     return false;
                 }
             }
@@ -680,7 +637,7 @@ namespace BybitPerpetualsTradingBot
 
                 if (responseBatchOrder?.RetCode != 0)
                 {
-                    LogAndPrint(LogLevel.Error, "Error placing scaling orders for active trading pair {0}: {1}", Symbol, responseBatchOrder?.RetMsg);
+                    LogAndPrint(LogLevel.Error, "{0}: Error placing scaling orders for, {1}", Symbol, responseBatchOrder?.RetMsg);
                     return false;
                 }
 
@@ -688,7 +645,7 @@ namespace BybitPerpetualsTradingBot
                 ApiResponse<GetOpenAndClosedOrdersResult, object>? responseOpenOrders = await GetOpenAndClosedOrders(Category.Linear, Symbol, OpenOnly.True);
                 if (responseOpenOrders?.RetCode != 0)
                 {
-                    LogAndPrint(LogLevel.Error, "Error getting open orders for active trading pair {0}: {1}", Symbol, responseOpenOrders?.RetMsg);
+                    LogAndPrint(LogLevel.Error, "{0}: Error getting open orders, {1}", Symbol, responseOpenOrders?.RetMsg);
                     return false;
                 }
 
@@ -709,11 +666,13 @@ namespace BybitPerpetualsTradingBot
                     ScalingLevel scalingLevel = scalingLevelsBatch[i];
                     if (responseBatchOrder.RetExtInfo.List[i].Code != 0)
                     {
-                        LogAndPrint(LogLevel.Error, "Error placing scaling order for active trading pair {0} at price {1} and quantity {2}: {3}", Symbol, scalingLevel.Price, scalingLevel.Quantity, responseBatchOrder.RetExtInfo.List[i].Msg);
+                        LogAndPrint(LogLevel.Error, "{0}: Error placing scaling order at price {1} and quantity {2}, {3}", Symbol, scalingLevel.Price, scalingLevel.Quantity, responseBatchOrder.RetExtInfo.List[i].Msg);
                         return false;
                     }
                 }
             }
+
+            LogAndPrint(LogLevel.Information, "{0}: Scaling orders placed", Symbol);
 
             return true;
         }
@@ -729,7 +688,7 @@ namespace BybitPerpetualsTradingBot
             ApiResponse<GetPositionInfoResult, object>? responsePositionInfo = await GetPositionInfo(Category.Linear, symbol);
             if (responsePositionInfo?.RetCode != 0)
             {
-                LogAndPrint(LogLevel.Error, "Error getting position info for active trading pair {0}: {1}", symbol, responsePositionInfo?.RetMsg);
+                LogAndPrint(LogLevel.Error, "{0}: Error getting position info, {1}", symbol, responsePositionInfo?.RetMsg);
                 return false;
             }
             activeTradingPair.Position = responsePositionInfo?.Result?.List?.FirstOrDefault() ?? new();
@@ -737,14 +696,14 @@ namespace BybitPerpetualsTradingBot
             if (!TryParseDecimal(activeTradingPair.Position.Size, out decimal currentQty) || currentQty <= 0 ||
                 !TryParseDecimal(activeTradingPair.Position.AvgPrice, out decimal currentAvgPrice) || currentAvgPrice <= 0)
             {
-                LogAndPrint(LogLevel.Error, "Invalid current quantity or average price for pair {0}", symbol);
+                LogAndPrint(LogLevel.Error, "{0}: Invalid current quantity or average price", symbol);
                 return false;
             }
 
             if (!TryParseDecimal(_instrumentsInfo[symbol].LotSizeFilter?.QtyStep, out decimal qtyStep) || qtyStep <= 0 ||
             !TryParseDecimal(_instrumentsInfo[symbol].PriceFilter?.TickSize, out decimal priceTickSize) || priceTickSize <= 0)
             {
-                LogAndPrint(LogLevel.Error, "Invalid quantity step or price tick size for pair {0}", symbol);
+                LogAndPrint(LogLevel.Error, "{0}: Invalid quantity step or price tick size", symbol);
                 return false;
             }
 
