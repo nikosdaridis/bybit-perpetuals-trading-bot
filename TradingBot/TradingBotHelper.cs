@@ -357,14 +357,16 @@ namespace BybitPerpetualsTradingBot
             if (responseOpenOrders.Result?.List?.Any(order => order.OrderStatus == OrderStatus.PartiallyFilled) == true)
                 return false;
 
-            // Check if there is open order with price close to last price within tick size threshold to wait for it to be filled
-            if (responseOpenOrders.Result?.List?.Any(order =>
+            // Check if initial order price is within threshold of last price
+            if (responseOpenOrders.Result?.List?.Count == 1 && responseOpenOrders.Result.List.Any(order =>
             {
                 if (TryParseDecimal(order.Price, out decimal orderPrice) &&
                     TryParseDecimal(responseTickers.Result?.List?.FirstOrDefault()?.LastPrice, out decimal lastPrice) &&
                     TryParseDecimal(_instrumentsInfo[Symbol].PriceFilter?.TickSize, out decimal tickSize))
                 {
-                    return Math.Abs(orderPrice - lastPrice) < tickSize * ActiveTradingPair.Configuration.InitialPriceTickSizeThreshold;
+                    bool isWithinThreshold = Math.Abs(orderPrice - lastPrice) < tickSize * ActiveTradingPair.Configuration.InitialPriceTickSizeThreshold;
+
+                    return isWithinThreshold;
                 }
 
                 return false;
@@ -468,7 +470,7 @@ namespace BybitPerpetualsTradingBot
                 return false;
             }
 
-            LogAndPrint(LogLevel.Information, "{0}: Initial order placed, quantity {1} and price {2}", Symbol, adjustedQuantity, orderPrice);
+            LogAndPrint(LogLevel.Information, "{0}: Initial order placed, price {1} quantity {2}", Symbol, orderPrice, adjustedQuantity);
 
             // Update active trading pair with calculated initial quantity and reset scaling levels
             ActiveTradingPair.CalculatedInitialQuantity = adjustedQuantity;
@@ -528,10 +530,10 @@ namespace BybitPerpetualsTradingBot
             takeProfitPrice = (Math.Round(takeProfitPrice / priceTickSize) * priceTickSize).Normalize();
             GetOpenAndClosedOrdersDetails? takeProfitOrder = responseOpenOrders.Result?.List?.FirstOrDefault(order => order.ReduceOnly.GetValueOrDefault());
 
-            // Check if take profit price is different from take profit order price to amend order with new price and quantity
+            // Check if take profit price or quantity is different from take profit order price or position quantity to amend order with new price and quantity
             if (takeProfitOrder is not null)
             {
-                if (takeProfitOrder?.Price == takeProfitPrice.ToString())
+                if (takeProfitOrder?.Price == takeProfitPrice.ToString() && takeProfitOrder.Quantity == ActiveTradingPair.Position.Size)
                     return false;
                 else
                 {
@@ -542,6 +544,8 @@ namespace BybitPerpetualsTradingBot
                         return false;
                     }
 
+                    LogAndPrint(LogLevel.Information, "{0}: Take profit order amended, price {1} quantity {2}", Symbol, takeProfitPrice, ActiveTradingPair.Position.Size);
+                    
                     return true;
                 }
             }
@@ -575,7 +579,7 @@ namespace BybitPerpetualsTradingBot
                 return false;
             }
 
-            LogAndPrint(LogLevel.Information, "{0}: Take profit order placed, quantity {1} and price {2}", Symbol, ActiveTradingPair.Position.Size, takeProfitPrice);
+            LogAndPrint(LogLevel.Information, "{0}: Take profit order placed, price {1} quantity {2}", Symbol, takeProfitPrice, ActiveTradingPair.Position.Size);
 
             return true;
         }

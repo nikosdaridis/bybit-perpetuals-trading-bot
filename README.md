@@ -1,7 +1,9 @@
 # Bybit Perpetuals Trading Bot
 
-This console app project is a **Crypto perpetual futures trading bot** that connects to **Bybit's API v5** for automated trading. The bot simply follows the configuration you provide. **It does not perform any risk management or analysis**.
-It is designed to operate in for **Cross Margin Mode** with **One-Way Position Mode** utilizing a **DCA (Dollar-Cost Averaging) strategy** by placing scaling orders.
+A **Crypto perpetual futures trading bot** that connects to **Bybit's API v5** for automated trading. The bot simply follows the configuration you provide. **It does not perform any risk management or analysis**.
+
+It is designed to operate in **Cross Margin Mode** with **One-Way Position Mode** utilizing a **DCA strategy** by placing scaling orders.
+
 [Configurator Website](https://bybit-perpetuals-trading-bot.pages.dev/)
 
 ---
@@ -28,7 +30,7 @@ This file contains settings for **API connection, execution limits, and logging*
 | **`APIKey`**       | Your Bybit API v5 key (System-generated HMAC)                                         |
 | **`APISecret`**    | Your Bybit API v5 secret (System-generated HMAC)                                      |
 | **`APIRateLimit`** | Maximum number of API requests per second                                             |
-| **`Endpoint`**     | URL for Bybit API v5 requests, formatted with `{product}` and `{module}` placeholders |
+| **`Endpoint`**     | URI for Bybit API v5 requests, formatted with `{product}` and `{module}` placeholders |
 | **`RecvWindow`**   | The allowed time window (in milliseconds) for API request validation                  |
 | **`RunningTasks`** | Maximum number of concurrent trading tasks (pairs)                                    |
 
@@ -49,25 +51,25 @@ This file contains settings for **API connection, execution limits, and logging*
 
 ---
 
-## `pairs.json` (Trading Pair Settings)
+## `pairs.json`
 
-This file contains active trading pairs and their configurations
+This file contains **active trading pairs** and their **configurations**
 
 ### 🔹 Pairs Configurations
 
-Each trading pair has a **customized trading strategy** defined by the following parameters:
+Each pair has a **customizable strategy** defined by the following parameters:
 
-| Parameter                              | Description                                                                      |
-| -------------------------------------- | -------------------------------------------------------------------------------- |
-| **`Side`**                             | **Buy** or **Sell**, indicating the direction of the trade                       |
-| **`Leverage`**                         | Leverage multiplier                                                              |
-| **`InitialMargin`**                    | Margin for the initial position                                                  |
-| **`InitialPriceTickSizeOffset`**       | Offset from the current price when placing initial position order                |
-| **`InitialPriceTickSizeThreshold`**    | Threshold for the current price and initial position order price to cancel order |
-| **`TakeProfitPercentage`**             | Profit percentage for the take profit order                                      |
-| **`NumberOfScalingLevels`**            | Number of scaling levels                                                         |
-| **`InitialScalingUnrealizedPnL`**      | Unrealized loss percentage for first scaling level                               |
-| **`InitialScalingQuantityMultiplier`** | Multiplier for first scaling level quantity                                      |
-| **`MaxScalingUnrealizedPnL`**          | Maximum unrealized loss percentage for scaling levels                            |
-| **`ScalingUnrealisedPnlMultiplier`**   | Unrealized loss percentage multiplier for scaling levels                         |
-| **`ScalingQuantityMultiplier`**        | Quantity multiplier for scaling levels                                           |
+| Parameter                              | Description                                                       |
+| -------------------------------------- | ----------------------------------------------------------------- |
+| **`Side`**                             | **Buy** or **Sell**, indicating the direction of the trade        |
+| **`Leverage`**                         | Leverage multiplier                                               |
+| **`InitialMargin`**                    | Margin for the initial position                                   |
+| **`InitialPriceTickSizeOffset`**       | Offset from the current price when placing initial position order |
+| **`InitialPriceTickSizeThreshold`**    | Threshold from the current price to cancel initial position order |
+| **`TakeProfitPercentage`**             | Profit percentage for the take profit order                       |
+| **`NumberOfScalingLevels`**            | Number of scaling levels                                          |
+| **`InitialScalingUnrealizedPnL`**      | Unrealized loss percentage for first scaling level                |
+| **`InitialScalingQuantityMultiplier`** | Multiplier for first scaling level quantity                       |
+| **`MaxScalingUnrealizedPnL`**          | Maximum unrealized loss percentage for scaling levels             |
+| **`ScalingUnrealisedPnlMultiplier`**   | Unrealized loss percentage multiplier for scaling levels          |
+| **`ScalingQuantityMultiplier`**        | Quantity multiplier for scaling levels                            |
