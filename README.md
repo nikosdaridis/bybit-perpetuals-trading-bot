@@ -1,6 +1,6 @@
 # Bybit Perpetuals Trading Bot
 
-A **Crypto perpetual futures trading bot** that connects to **Bybit's API v5** for automated trading. The bot simply follows the configuration you provide. **It does not perform any risk management or analysis**.
+A **Crypto perpetual futures trading bot** that connects to **Bybit API v5** for automated trading. The bot simply follows the configuration you provide. **It does not perform any risk management or analysis**.
 
 It is designed to operate in **Cross Margin Mode** with **One-Way Position Mode** utilizing a **DCA strategy** by placing scaling orders.
 

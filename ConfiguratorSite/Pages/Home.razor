@@ -4,6 +4,7 @@
 @inject IJSRuntime JSRuntime
 @inject BaseHttpClient httpClient
 @inject NotificationService NotificationService
+@inject LocalStorageService LocalStorageService
 
 <PageTitle>@_selectedPair Configurator - Bybit Perpetuals Trading Bot</PageTitle>
 
@@ -192,7 +193,7 @@
         if (responseInstrumentsInfo is not null && responseInstrumentsInfo?.Result?.List?.Count > 0)
             _pairsInfo = responseInstrumentsInfo?.Result?.List?.ToDictionary(x => x.Symbol ?? string.Empty, x => x) ?? [];
 
-        OnInputChange();
+        await OnInputChange();
     }
 
     private async Task OnSelectedPairChange()
@@ -214,15 +215,24 @@
         if (responseTickers?.Result?.List?.First() is not null)
             _tickers = responseTickers.Result.List.First();
 
-        OnInputChange();
+        Configuration? localStorageConfiguration = await LocalStorageService.GetConfigurationAsync(_selectedPair);
+
+        if (localStorageConfiguration is not null)
+            _configuration = localStorageConfiguration;
+
+        await OnInputChange();
     }
 
-    private void OnInputChange()
+    private async Task OnInputChange()
     {
         if (string.IsNullOrEmpty(_selectedPair) || !_pairsInfo.ContainsKey(_selectedPair))
             return;
 
         ValidateConfiguration();
+
+        if (_errors.Count <= 0)
+            await LocalStorageService.SetConfigurationAsync(_selectedPair, _configuration);
+
         CalculateScalingLevels();
     }
 
