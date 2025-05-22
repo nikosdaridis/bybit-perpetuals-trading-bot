@@ -2,16 +2,16 @@
 {
     internal sealed class PairsConfiguration
     {
-        public string[] ActiveTradingPairs { get; set; } = ["Add", "Pairs", "Here", "And", "Configurations", "Below"];
+        public string[] ActiveTradingPairs { get; init; } = ["BTCUSDT", "ETHUSDT"];
 
-        public Dictionary<string, PairConfiguration> PairsConfigurations { get; set; } = new()
+        public Dictionary<string, PairConfiguration> PairsConfigurations { get; init; } = new()
         {
             {
                 "BTCUSDT", new ()
                 {
                     Side = "Buy",
-                    Leverage = 20,
-                    InitialMargin = 5,
+                    Leverage = 30,
+                    InitialMargin = 10,
                     InitialPriceTickSizeOffset = 2,
                     InitialPriceTickSizeThreshold = 5,
                     TakeProfitPercentage = 50,
@@ -27,8 +27,8 @@
                 "ETHUSDT", new ()
                 {
                     Side = "Buy",
-                    Leverage = 20,
-                    InitialMargin = 5,
+                    Leverage = 30,
+                    InitialMargin = 10,
                     InitialPriceTickSizeOffset = 2,
                     InitialPriceTickSizeThreshold = 5,
                     TakeProfitPercentage = 50,
@@ -44,18 +44,18 @@
 
         internal sealed class PairConfiguration
         {
-            public string? Side { get; set; }
-            public decimal? Leverage { get; set; }
-            public decimal? InitialMargin { get; set; }
-            public ushort? InitialPriceTickSizeOffset { get; set; }
-            public ushort? InitialPriceTickSizeThreshold { get; set; }
-            public decimal? TakeProfitPercentage { get; set; }
-            public ushort? NumberOfScalingLevels { get; set; }
-            public decimal? InitialScalingUnrealizedPnL { get; set; }
-            public decimal? InitialScalingQuantityMultiplier { get; set; }
-            public decimal? MaxScalingUnrealizedPnL { get; set; }
-            public decimal? ScalingUnrealisedPnlMultiplier { get; set; }
-            public decimal? ScalingQuantityMultiplier { get; set; }
+            public string? Side { get; init; }
+            public decimal? Leverage { get; init; }
+            public decimal? InitialMargin { get; init; }
+            public ushort? InitialPriceTickSizeOffset { get; init; }
+            public ushort? InitialPriceTickSizeThreshold { get; init; }
+            public decimal? TakeProfitPercentage { get; init; }
+            public ushort? NumberOfScalingLevels { get; init; }
+            public decimal? InitialScalingUnrealizedPnL { get; init; }
+            public decimal? InitialScalingQuantityMultiplier { get; init; }
+            public decimal? MaxScalingUnrealizedPnL { get; init; }
+            public decimal? ScalingUnrealisedPnlMultiplier { get; init; }
+            public decimal? ScalingQuantityMultiplier { get; init; }
         }
     }
 }

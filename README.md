@@ -1,6 +1,6 @@
 # Bybit Perpetuals Trading Bot
 
-A **Crypto perpetual futures trading bot** that connects to **Bybit API v5** for automated trading. The bot simply follows the configuration you provide. **It does not perform any risk management or analysis**.
+A **Cryptocurrency perpetual futures trading bot** that connects to **Bybit API v5** for automated trading. The bot simply follows the configuration you provide. **It does not perform any risk management or analysis**.
 
 It is designed to operate in **Cross Margin Mode** with **One-Way Position Mode** utilizing a **DCA strategy** by placing scaling orders.
 
@@ -10,14 +10,13 @@ It is designed to operate in **Cross Margin Mode** with **One-Way Position Mode*
 
 ## DISCLAIMER
 
-This software is for **educational purposes only**. **DO NOT** use it with a real trading account or real funds. Doing so may result in significant financial loss.
+This software is for **educational purposes only**. Do not use it with a real trading account or real funds. Doing so may result in significant financial loss.
 
 By using this software, you acknowledge and agree that:
 
 - This software is provided "as is" without any warranty of accuracy, reliability, or performance.
 - The authors and developers are not responsible for any financial losses, damages, or other consequences.
-- **USE THE SOFTWARE AT YOUR OWN RISK.**
-- If you choose to use it, **you accept full responsibility** for your trading results.
+- If you choose to use it, you accept full responsibility for your trading results.
 
 ## `settings.json`
 
@@ -31,7 +30,7 @@ This file contains settings for **API connection, execution limits, and logging*
 | **`APISecret`**    | Your Bybit API v5 secret (System-generated HMAC)                                      |
 | **`APIRateLimit`** | Maximum number of API requests per second                                             |
 | **`Endpoint`**     | URI for Bybit API v5 requests, formatted with `{product}` and `{module}` placeholders |
-| **`RecvWindow`**   | The allowed time window (in milliseconds) for API request validation                  |
+| **`RecvWindow`**   | The time window (in milliseconds) within which an API request is valid                |
 | **`RunningTasks`** | Maximum number of concurrent trading tasks (pairs)                                    |
 
 ### 🔹 Logging Configuration
@@ -53,11 +52,15 @@ This file contains settings for **API connection, execution limits, and logging*
 
 ## `pairs.json`
 
-This file contains **active trading pairs** and their **configurations**
+This file contains **active trading pairs** and their **configurations**.
+
+### 🔹 Active Trading Pairs
+
+| Parameter                | Description                                                             |
+| ------------------------ | ----------------------------------------------------------------------- |
+| **`ActiveTradingPairs`** | List of trading pairs currently enabled, each must have a configuration |
 
 ### 🔹 Pairs Configurations
-
-Each pair has a **customizable strategy** defined by the following parameters:
 
 | Parameter                              | Description                                                       |
 | -------------------------------------- | ----------------------------------------------------------------- |

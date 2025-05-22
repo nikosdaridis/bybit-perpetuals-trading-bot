@@ -2,67 +2,67 @@
 {
     internal sealed class ApiRequest<TBusinessData>
     {
-        public string? Category { get; set; }
+        public string? Category { get; init; }
 
-        public List<TBusinessData>? Request { get; set; }
+        public List<TBusinessData>? Request { get; init; }
     }
 
     internal sealed class BatchOrderRequest
     {
-        public string? Symbol { get; set; }
+        public string? Symbol { get; init; }
 
-        public int? IsLeverage { get; set; }
+        public int? IsLeverage { get; init; }
 
-        public string? Side { get; set; }
+        public string? Side { get; init; }
 
-        public string? OrderType { get; set; }
+        public string? OrderType { get; init; }
 
-        public string? Qty { get; set; }
+        public string? Qty { get; init; }
 
-        public string? MarketUnit { get; set; }
+        public string? MarketUnit { get; init; }
 
-        public string? Price { get; set; }
+        public string? Price { get; init; }
 
-        public int? TriggerDirection { get; set; }
+        public int? TriggerDirection { get; init; }
 
-        public string? OrderFilter { get; set; }
+        public string? OrderFilter { get; init; }
 
-        public string? TriggerPrice { get; set; }
+        public string? TriggerPrice { get; init; }
 
-        public string? TriggerBy { get; set; }
+        public string? TriggerBy { get; init; }
 
-        public string? OrderIv { get; set; }
+        public string? OrderIv { get; init; }
 
-        public string? TimeInForce { get; set; }
+        public string? TimeInForce { get; init; }
 
-        public int? PositionIdx { get; set; }
+        public int? PositionIdx { get; init; }
 
-        public string? OrderLinkId { get; set; }
+        public string? OrderLinkId { get; init; }
 
-        public string? TakeProfit { get; set; }
+        public string? TakeProfit { get; init; }
 
-        public string? StopLoss { get; set; }
+        public string? StopLoss { get; init; }
 
-        public string? TpTriggerBy { get; set; }
+        public string? TpTriggerBy { get; init; }
 
-        public string? SlTriggerBy { get; set; }
+        public string? SlTriggerBy { get; init; }
 
-        public bool? ReduceOnly { get; set; }
+        public bool? ReduceOnly { get; init; }
 
-        public bool? CloseOnTrigger { get; set; }
+        public bool? CloseOnTrigger { get; init; }
 
-        public string? SmpType { get; set; }
+        public string? SmpType { get; init; }
 
-        public bool? Mmp { get; set; }
+        public bool? Mmp { get; init; }
 
-        public string? TpslMode { get; set; }
+        public string? TpslMode { get; init; }
 
-        public string? TpLimitPrice { get; set; }
+        public string? TpLimitPrice { get; init; }
 
-        public string? SlLimitPrice { get; set; }
+        public string? SlLimitPrice { get; init; }
 
-        public string? TpOrderType { get; set; }
+        public string? TpOrderType { get; init; }
 
-        public string? SlOrderType { get; set; }
+        public string? SlOrderType { get; init; }
     }
 }

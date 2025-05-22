@@ -12,7 +12,7 @@
         public RateLimiter(ushort limit, TimeSpan releasePeriod)
         {
             _limit = limit;
-            _semaphoreSlim = new SemaphoreSlim(limit, limit);
+            _semaphoreSlim = new SemaphoreSlim(_limit, _limit);
             _timer = new Timer(ReleaseTokens, null, releasePeriod, releasePeriod);
         }
 

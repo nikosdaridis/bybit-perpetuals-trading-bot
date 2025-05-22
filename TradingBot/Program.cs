@@ -1,47 +1,44 @@
-﻿using BybitPerpetualsTradingBot.Models;
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Globalization;
 
 namespace BybitPerpetualsTradingBot
 {
-    internal sealed class TradingBot(ILogger<TradingBot> logger)
+    internal sealed class TradingBot
     {
-        private readonly ILogger<TradingBot> _logger = logger;
-        private readonly TradingBotState _state = new();
-
         static async Task Main()
         {
             CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
 
             ServiceCollection serviceCollection = new();
-            ConfigureServices.AddServices(serviceCollection);
+            serviceCollection.AddServices();
             ServiceProvider serviceProvider = serviceCollection.BuildServiceProvider();
 
-            TradingBot tradingBot = serviceProvider.GetRequiredService<TradingBot>();
-            TradingBotHelper.InitializeDependencies(serviceProvider.GetRequiredService<BaseHttpClient>(), tradingBot._logger);
+            TradingBotService tradingBotService = serviceProvider.GetRequiredService<TradingBotService>();
+            ILogger<TradingBot> logger = serviceProvider.GetRequiredService<ILogger<TradingBot>>();
+
+            bool initialized = false;
 
             while (true)
             {
                 try
                 {
-                    if (!tradingBot._state.InitializedActiveTradingPairs)
+                    if (!initialized)
                     {
-                        tradingBot._state.InitializedActiveTradingPairs = await TradingBotHelper.InitializeActiveTradingPairs();
+                        initialized = await tradingBotService.InitializeActiveTradingPairs();
                         continue;
                     }
 
-                    await TradingBotHelper.ExecuteTasksConcurrently(
+                    await tradingBotService.ExecuteTasksConcurrently(
                     [
-                        TradingBotHelper.PlaceInitialPosition,
-                        TradingBotHelper.PlaceOrAmendTakeProfitOrder,
-                        TradingBotHelper.PlaceScalingOrders
+                        tradingBotService.PlaceInitialPosition,
+                        tradingBotService.PlaceOrAmendTakeProfitOrder,
+                        tradingBotService.PlaceScalingOrders
                     ]);
                 }
                 catch (Exception ex)
                 {
-                    tradingBot._logger.LogError(ex, "Error occurred in trading loop");
-                    Console.WriteLine($"Error occurred in trading loop: {ex.Message}");
+                    Helpers.LogAndPrint(logger, LogLevel.Error, "Error occurred in trading loop: {0}", ex.Message);
                 }
             }
         }

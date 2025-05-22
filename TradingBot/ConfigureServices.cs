@@ -12,15 +12,17 @@ namespace BybitPerpetualsTradingBot
         private static readonly OSPlatform[] _supportedOSPlatforms = [OSPlatform.Windows, OSPlatform.Linux];
 
         /// <summary>
-        /// Adds services
+        /// Adds services to the service collection
         /// </summary>
-        public static void AddServices(ServiceCollection serviceCollection)
+        public static void AddServices(this ServiceCollection serviceCollection)
         {
             serviceCollection.AddSingleton<HttpClient>();
             serviceCollection.AddSingleton<BaseHttpClient>();
-            serviceCollection.AddSingleton<TradingBot>();
+            serviceCollection.AddSingleton<ApiService>();
+            serviceCollection.AddSingleton<TradingBotService>();
 
-            Settings settings = TradingBotHelper.LoadFileData<Settings>(TradingBotHelper.settingsFilePath);
+            Settings settings = Helpers.LoadFileData<Settings>(TradingBotService.settingsFilePath);
+
             ConfigureSerilog(settings);
             serviceCollection.AddLogging(loggingBuilder => loggingBuilder.AddSerilog(dispose: true));
         }

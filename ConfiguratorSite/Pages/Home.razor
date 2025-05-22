@@ -173,7 +173,7 @@
     private Dictionary<string, InstrumentList> _pairsInfo = [];
     private string _selectedPair = string.Empty;
     private TickersList? _tickers;
-    private Configuration _configuration = new("Buy", 20, 5, 2, 5, 50, 10, 100, 0.5m, 700, 1.3m, 1.2m);
+    private Configuration _configuration = new("Buy", 30, 10, 2, 5, 50, 10, 100, 0.5m, 700, 1.3m, 1.2m);
     private HashSet<string> _errors = [];
     private HashSet<MarkupString> _scalingLevelsMarkup = [];
 
@@ -355,16 +355,16 @@
             decimal totalMargin = adjustedQuantity * lastPrice / _configuration.Leverage.GetValueOrDefault();
 
             scalingLevels.Add(new()
-                {
-                    Level = 0,
-                    AveragePrice = lastPrice,
-                    PnL = 0,
-                    Price = lastPrice,
-                    Quantity = adjustedQuantity,
-                    Margin = totalMargin,
-                    TotalQuantity = adjustedQuantity,
-                    TotalMargin = totalMargin,
-                });
+            {
+                Level = 0,
+                AveragePrice = lastPrice,
+                PnL = 0,
+                Price = lastPrice,
+                Quantity = adjustedQuantity,
+                Margin = totalMargin,
+                TotalQuantity = adjustedQuantity,
+                TotalMargin = totalMargin,
+            });
 
             decimal pnlFactor = 1m;
             decimal levelQty = adjustedQuantity * _configuration.InitialScalingQuantityMultiplier ?? 1;
@@ -407,16 +407,16 @@
                 }
 
                 scalingLevels.Add(new()
-                    {
-                        Level = (ushort)(i + 1),
-                        AveragePrice = lastPrice,
-                        PnL = pnlPercentage,
-                        Price = roundedPrice,
-                        Quantity = roundedQty,
-                        Margin = margin,
-                        TotalQuantity = adjustedQuantity,
-                        TotalMargin = totalMargin
-                    });
+                {
+                    Level = (ushort)(i + 1),
+                    AveragePrice = lastPrice,
+                    PnL = pnlPercentage,
+                    Price = roundedPrice,
+                    Quantity = roundedQty,
+                    Margin = margin,
+                    TotalQuantity = adjustedQuantity,
+                    TotalMargin = totalMargin
+                });
             }
 
             _scalingLevelsMarkup = scalingLevels.Select(x => new MarkupString(

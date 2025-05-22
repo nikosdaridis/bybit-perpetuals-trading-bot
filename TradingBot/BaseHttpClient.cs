@@ -20,7 +20,7 @@ namespace BybitPerpetualsTradingBot
             _httpClient = httpClient;
             _logger = logger;
 
-            _settings = TradingBotHelper.LoadFileData<Settings>(TradingBotHelper.settingsFilePath);
+            _settings = Helpers.LoadFileData<Settings>(TradingBotService.settingsFilePath, logger);
             _rateLimiter = new(_settings.APIRateLimit, TimeSpan.FromSeconds(1));
             _timer = new Timer(PrintRequestsPerSecond, null, TimeSpan.Zero, TimeSpan.FromSeconds(1));
         }
@@ -28,7 +28,7 @@ namespace BybitPerpetualsTradingBot
         /// <summary>
         /// GET request and returns deserialized response
         /// </summary>
-        public async Task<TResponse?> GetAsync<TResponse>(string uri, string apiKey, string timestamp, string signature, string recvWindow = "5000")
+        public async Task<TResponse?> GetAsync<TResponse>(string uri, string apiKey, string timestamp, string signature, string recvWindow)
         {
             HttpRequestMessage request = new(HttpMethod.Get, uri);
             AddHeaders(request, apiKey, timestamp, signature, recvWindow);
@@ -39,7 +39,7 @@ namespace BybitPerpetualsTradingBot
         /// <summary>
         /// POST request and returns deserialized response
         /// </summary>
-        public async Task<TResponse?> PostAsync<TResponse>(string uri, string jsonPayload, string apiKey, string timestamp, string signature, string recvWindow = "5000")
+        public async Task<TResponse?> PostAsync<TResponse>(string uri, string jsonPayload, string apiKey, string timestamp, string signature, string recvWindow)
         {
             HttpRequestMessage request = new(HttpMethod.Post, uri)
             {
