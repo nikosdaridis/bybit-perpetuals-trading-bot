@@ -13,7 +13,7 @@
 		<PackageReference Include="Microsoft.NET.ILLink.Tasks" Version="9.0.10" />
 		<PackageReference Include="Microsoft.NET.Sdk.WebAssembly.Pack" Version="9.0.10" />
 		<PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
-		<PackageReference Include="Radzen.Blazor" Version="8.0.4" />
+		<PackageReference Include="Radzen.Blazor" Version="8.1.0" />
 	</ItemGroup>
 
 </Project>
