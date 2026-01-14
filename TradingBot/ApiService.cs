@@ -126,7 +126,7 @@ namespace BybitPerpetualsTradingBot
         /// <summary>
         /// Places order for category, symbol, side, order type and quantity with optional price, timeInforce and reduceOnly
         /// </summary>
-        public async Task<ApiResponse<OrderResult, object>?> PlaceOrder(string category, string symbol, string side, string orderType, string qty, string price = "0", string timeInForce = "PostOnly", bool reduceOnly = false)
+        public async Task<ApiResponse<OrderResult, object>?> PlaceOrder(string category, string symbol, string side, string orderType, string qty, string price = "0", string timeInForce = TimeInForce.PostOnly, bool reduceOnly = false)
         {
             string uri = Helpers.BuildUri(TradingBotService._settings.Endpoint, EndpointProduct.Order, EndpointModule.Create);
 
