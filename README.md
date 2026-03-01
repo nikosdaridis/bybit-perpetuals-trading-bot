@@ -18,6 +18,10 @@ By using this software, you acknowledge and agree that:
 - The authors and developers are not responsible for any financial losses, damages, or other consequences.
 - If you choose to use it, you accept full responsibility for your trading results.
 
+## Demo
+
+![demo](https://github.com/user-attachments/assets/be3a5e0e-f776-401a-a56e-acccb515e92b)
+
 ## `settings.json`
 
 This file contains settings for **API connection, execution limits, and logging**.
