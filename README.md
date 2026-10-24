@@ -4,7 +4,7 @@ A **Cryptocurrency perpetual futures trading bot** that connects to **Bybit API 
 
 It is designed to operate in **Cross Margin Mode** with **One-Way Position Mode** utilizing a **DCA strategy** by placing scaling orders.
 
-[Configurator Website](https://bybit-perpetuals-trading-bot.pages.dev/)
+[Configurator Website](https://bybit-perpetuals-trading-bot.pages.dev/) - Not affiliated with or endorsed by Bybit. It never asks for API keys, passwords and only reads Bybit's public market data.
 
 ---
 

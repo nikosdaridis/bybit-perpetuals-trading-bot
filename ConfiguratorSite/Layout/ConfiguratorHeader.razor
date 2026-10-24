@@ -1,0 +1,12 @@
+﻿<div class="header">
+    <h2>Configurator for <a href="@SOURCE_REPOSITORY_URL" target="_blank" rel="noopener">Bybit Perpetuals Trading Bot</a></h2>
+</div>
+
+<RadzenAlert AlertStyle="AlertStyle.Info" Variant="Variant.Outlined" Size="AlertSize.Small" AllowClose="false">
+    Not affiliated with or endorsed by Bybit. It never asks for API keys, passwords and only reads Bybit's public market data.
+    <RadzenLink Path="@SOURCE_REPOSITORY_URL" Target="_blank" Text="GitHub" />
+</RadzenAlert>
+
+@code {
+    private const string SOURCE_REPOSITORY_URL = "https://github.com/nikosdaridis/bybit-perpetuals-trading-bot";
+}

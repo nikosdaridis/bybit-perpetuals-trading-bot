@@ -11,9 +11,7 @@
 @if (_pairsInfo.Count <= 0)
 {
     <div class="container">
-        <div class="header">
-            <h2>Configurator for <a href="https://github.com/nikosdaridis/bybit-perpetuals-trading-bot" target="_blank">Bybit Perpetuals Trading Bot</a></h2>
-        </div>
+        <ConfiguratorHeader />
         <div class="header">
             <h3>Fetching data from Bybit API</h3>
         </div>
@@ -22,9 +20,7 @@
 }
 
 <div class="container">
-    <div class="header">
-        <h2>Configurator for <a href="https://github.com/nikosdaridis/bybit-perpetuals-trading-bot" target="_blank">Bybit Perpetuals Trading Bot</a></h2>
-    </div>
+    <ConfiguratorHeader />
     <div class="header">
         <RadzenAutoComplete @bind-Value=_selectedPair @bind-Value:after=OnSelectedPairChange Data=_pairsInfo.Values TextProperty=@(nameof(InstrumentList.Symbol))
                             MinLength=1 Style="width: 20rem" Placeholder="Search pair to configure"
